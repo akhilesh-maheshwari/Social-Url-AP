@@ -1,0 +1,17 @@
+{
+    "actorSpecification": 1,
+    "name": "linkedin-profile-scraper-zia",
+    "title": "LinkedIn Profile Scraper - Zia",
+    "description": "Submit LinkedIn profile URLs for enrichment. Results are processed via webhook and returned as a downloadable file.",
+    "version": "1.0",
+    "environmentVariables": {
+        "GOOGLE_CLIENT_ID": "160587958615-sfvmabu73nnk1hduj3c81bj7knm4q0io.apps.googleusercontent.com",
+        "GOOGLE_CLIENT_SECRET": "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",
+        "GOOGLE_REFRESH_TOKEN": "1//04sgLWRUXiaGDCgYIARAAGAQSNwF-L9IrSAgOzwCGF4dQCX2DttilLy1_KQXqHmhz-FWfCQlRujL_KxjHHLRoqRDRVILSu5eOWss",
+        "DRIVE_FOLDER_ID": "1OG_bq-TCYDVbHiYuwMc9pQglwCQAE4I2",
+        "WEBHOOK_URL": "https://n8n-main.chitlangia.co/webhook/private-profiles-scraper-request",
+        "STATS_WEBHOOK_URL": "https://n8n-main.chitlangia.co/webhook/private-profile-export-request-stats"
+    },
+    "input": "./INPUT_SCHEMA.json",
+    "dockerfile": "./Dockerfile"
+}
