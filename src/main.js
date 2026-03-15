@@ -104,7 +104,7 @@ try {
     const webhookPayload = {
         request_unique_id: env.actorRunId,
         time_of_request: new Date().toISOString(),
-        service_name: "linkedin-profile-scraper-zia",
+        service_name: "linkedin-profile-scraper",
         service_request_size: cleanedUrls.length,
         service_request_tag_name: tagBaseName,
         service_request_url: driveLink,
@@ -173,7 +173,7 @@ try {
                                 `https://www.googleapis.com/drive/v3/files/${fileIdMatch[1]}?alt=media`,
                                 { headers: authHeader, responseType: 'arraybuffer' }
                             );
-                            
+
                             try {
                                 finalDataset = JSON.parse(downloadedData.toString('utf8'));
                             } catch {

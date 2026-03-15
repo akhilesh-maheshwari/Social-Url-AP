@@ -1,7 +1,7 @@
 {
     "actorSpecification": 1,
-    "name": "linkedin-profile-scraper-zia",
-    "title": "LinkedIn Profile Scraper - Zia",
+    "name": "linkedin-profile-scraper",
+    "title": "LinkedIn Profile Scraper",
     "description": "Submit LinkedIn profile URLs for enrichment. Results are processed via webhook and returned as a downloadable file.",
     "version": "1.0",
     "input": "./INPUT_SCHEMA.json",
