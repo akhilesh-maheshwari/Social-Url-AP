@@ -207,6 +207,55 @@ try {
         timestamp: new Date().toISOString(),
     });
 
+    // ──────────────────────────────
+    // SAVE TO AIRTABLE
+    // ──────────────────────────────
+    try {
+        log.info('Saving to Airtable...');
+
+        const now = new Date();
+        const timeOfRequest = now.toLocaleString('en-US', {
+            year    : 'numeric',
+            month   : 'long',
+            day     : 'numeric',
+            hour    : 'numeric',
+            minute  : '2-digit',
+            hour12  : true,
+            timeZone: 'Asia/Kolkata'
+        });
+
+        const creditsCost = parseFloat((cleanedUrls.length * 0.01).toFixed(2));
+
+        const atRes = await axios.post(
+            'https://api.airtable.com/v0/appCuadMXrDqpfaDV/tblD3UXc3tYW0mOdT',
+            {
+                fields: {
+                    user_unique_id              : env.userId        || 'unknown',
+                    request_unique_id           : env.actorRunId    || 'unknown',
+                    time_of_request             : timeOfRequest,
+                    service_request_tag_name    : tagBaseName,
+                    service_request_size        : cleanedUrls.length,
+                    service_request_credits_cost: creditsCost,
+                    service_request_url         : driveLink
+                }
+            },
+            {
+                headers: {
+                    'Authorization': 'Bearer pat4bRijwFM7m1t9u.c5fa218d14d840e4180f628656b63c163ce71bd8d01881d971ee96fe2d939dd8',
+                    'Content-Type' : 'application/json'
+                }
+            }
+        );
+
+        if (atRes.data && atRes.data.id) {
+            log.info(`✅ Airtable record saved! ID: ${atRes.data.id}`);
+        } else {
+            log.warning(`❌ Airtable error: ${JSON.stringify(atRes.data)}`);
+        }
+
+    } catch (atError) {
+        log.warning(`❌ Airtable save failed: ${atError.message}`);
+    }
 } catch (error) {
     log.error(`Error: ${error.message}`);
 
