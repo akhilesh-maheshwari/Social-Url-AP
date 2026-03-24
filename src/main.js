@@ -1,5 +1,3 @@
-console.log('=== NEW CODE RUNNING FROM GITHUB ===');
-
 import { Actor, log } from 'apify';
 import axios from 'axios';
 import * as xlsx from 'xlsx';
@@ -44,13 +42,10 @@ try {
     const tagBaseName = safeFileName.replace(/\.xlsx$/, '');
     const filePath = path.join(os.tmpdir(), safeFileName);
 
-    // ── STEP 1: Create Excel ──
-    log.info('STEP 1: Creating Excel file...');
     const workbook = xlsx.utils.book_new();
     const worksheet = xlsx.utils.json_to_sheet(cleanedUrls.map(url => ({ "LinkedIn URL": url })));
     xlsx.utils.book_append_sheet(workbook, worksheet, "Profiles");
     xlsx.writeFile(workbook, filePath);
-    log.info(`STEP 1: Excel file created at ${filePath}`);
 
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -60,88 +55,52 @@ try {
         throw new Error('Missing Google OAuth credentials in environment variables.');
     }
 
-    // ── STEP 2: Get OAuth Token ──
-    log.info('STEP 2: Fetching Google OAuth token...');
-    let tokenData;
-    try {
-        const res = await axios.post('https://oauth2.googleapis.com/token', null, {
-            params: {
-                client_id: clientId,
-                client_secret: clientSecret,
-                refresh_token: refreshToken,
-                grant_type: 'refresh_token',
-            },
-        });
-        tokenData = res.data;
-        log.info('STEP 2: OAuth token received successfully');
-    } catch (err) {
-        throw new Error(`STEP 2 FAILED - OAuth token error: ${err.message} | Status: ${err?.response?.status} | Body: ${JSON.stringify(err?.response?.data)}`);
-    }
+    const { data: tokenData } = await axios.post('https://oauth2.googleapis.com/token', null, {
+        params: {
+            client_id: clientId,
+            client_secret: clientSecret,
+            refresh_token: refreshToken,
+            grant_type: 'refresh_token',
+        },
+    });
 
     const accessToken = tokenData.access_token;
     const authHeader = { 'Authorization': `Bearer ${accessToken}` };
 
-    // ── STEP 3: Upload to Drive ──
-    log.info('STEP 3: Uploading file to Google Drive...');
-    let uploadData;
-    try {
-        const form = new FormData();
-        form.append('metadata', JSON.stringify({ name: safeFileName, parents: [DRIVE_FOLDER_ID] }), { contentType: 'application/json' });
-        form.append('file', fs.createReadStream(filePath), {
-            contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            filename: safeFileName,
-        });
+    const form = new FormData();
+    form.append('metadata', JSON.stringify({ name: safeFileName, parents: [DRIVE_FOLDER_ID] }), { contentType: 'application/json' });
+    form.append('file', fs.createReadStream(filePath), {
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        filename: safeFileName,
+    });
 
-        const res = await axios.post(
-            'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true',
-            form,
-            {
-                headers: { ...form.getHeaders(), ...authHeader },
-                maxContentLength: Infinity,
-                maxBodyLength: Infinity,
-            },
-        );
-        uploadData = res.data;
-        log.info(`STEP 3: File uploaded successfully. File ID: ${uploadData.id}`);
-    } catch (err) {
-        throw new Error(`STEP 3 FAILED - Drive upload error: ${err.message} | Status: ${err?.response?.status} | Body: ${JSON.stringify(err?.response?.data)}`);
-    }
+    const { data: uploadData } = await axios.post(
+        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true',
+        form,
+        {
+            headers: { ...form.getHeaders(), ...authHeader },
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity,
+        },
+    );
 
     const fileId = uploadData.id;
 
-    // ── STEP 4: Set Permissions ──
-    log.info('STEP 4: Setting file permissions...');
-    try {
-        await axios.post(
-            `https://www.googleapis.com/drive/v3/files/${fileId}/permissions?supportsAllDrives=true`,
-            { role: 'reader', type: 'anyone' },
-            { headers: { ...authHeader, 'Content-Type': 'application/json' } },
-        );
-        log.info('STEP 4: Permissions set successfully');
-    } catch (err) {
-        throw new Error(`STEP 4 FAILED - Permissions error: ${err.message} | Status: ${err?.response?.status} | Body: ${JSON.stringify(err?.response?.data)}`);
-    }
+    await axios.post(
+        `https://www.googleapis.com/drive/v3/files/${fileId}/permissions?supportsAllDrives=true`,
+        { role: 'reader', type: 'anyone' },
+        { headers: { ...authHeader, 'Content-Type': 'application/json' } },
+    );
 
-    // ── STEP 5: Get Drive Link ──
-    log.info('STEP 5: Getting Drive link...');
-    let fileData;
-    try {
-        const res = await axios.get(
-            `https://www.googleapis.com/drive/v3/files/${fileId}?fields=webViewLink&supportsAllDrives=true`,
-            { headers: authHeader },
-        );
-        fileData = res.data;
-        log.info(`STEP 5: Drive link obtained: ${fileData.webViewLink}`);
-    } catch (err) {
-        throw new Error(`STEP 5 FAILED - Get link error: ${err.message} | Status: ${err?.response?.status} | Body: ${JSON.stringify(err?.response?.data)}`);
-    }
+    const { data: fileData } = await axios.get(
+        `https://www.googleapis.com/drive/v3/files/${fileId}?fields=webViewLink&supportsAllDrives=true`,
+        { headers: authHeader },
+    );
 
     const driveLink = fileData.webViewLink;
 
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 
-    // ── STEP 6: Call Webhook ──
-    log.info('STEP 6: Calling primary webhook...');
     const webhookPayload = {
         request_unique_id: env.actorRunId,
         time_of_request: new Date().toISOString(),
@@ -158,22 +117,19 @@ try {
             headers: { 'Content-Type': 'application/json' },
             timeout: 60_000,
         });
-        log.info(`STEP 6: Webhook response: ${JSON.stringify(webhookResData)}`);
         if (webhookResData && webhookResData.request_id) {
             pollRequestId = webhookResData.request_id;
-            log.info(`STEP 6: Poll request ID set to: ${pollRequestId}`);
         }
-    } catch (err) {
-        log.warning(`STEP 6 FAILED - Webhook error: ${err.message} | Status: ${err?.response?.status} | Body: ${JSON.stringify(err?.response?.data)}`);
+    } catch {
+        log.warning('Primary webhook timed out or failed — continuing to polling phase.');
     }
 
-    // ── STEP 7: Poll for Results ──
-    log.info(`STEP 7: Starting polling with request ID: ${pollRequestId}`);
+    log.info('Processing...');
+
     let finalDataset = [];
     let isCompleted = false;
 
     for (let i = 0; i < MAX_POLL_ATTEMPTS; i++) {
-        log.info(`STEP 7: Poll attempt ${i + 1}/${MAX_POLL_ATTEMPTS}...`);
         await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
         let pollData = null;
         try {
@@ -183,9 +139,8 @@ try {
                 timeout: 30_000,
             });
             pollData = data;
-            log.info(`STEP 7: Poll response: ${JSON.stringify(pollData)}`);
-        } catch (err) {
-            log.warning(`STEP 7: Poll attempt ${i + 1} failed: ${err.message}`);
+        } catch {
+            // Silently retry on next interval (network/timeout errors)
             continue;
         }
 
@@ -197,6 +152,7 @@ try {
                 log.info(`Progress: Processed ${stats.processed || 0}/${stats.total || 0} (Success: ${stats.success || 0}, Failed: ${stats.failed || 0})`);
             }
 
+            // Immediately evaluate if all records are processed
             const isFullyProcessed = stats && stats.total > 0 && stats.processed === stats.total;
             const isMarkedCompleted = reqResult?.request_status === 'Completed' || reqResult?.request_status === 'Success' || pollData?.status === 'completed';
 
@@ -229,7 +185,7 @@ try {
                         }
                     }
                 } else if (stats?.success > 0) {
-                    log.warning('Enrichment completed but no output URL provided by webhook.');
+                    log.warning('Enrichment completed with some successes, but no output URL was provided by the webhook.');
                 }
                 break;
             } else if (reqResult?.request_status === 'Failed') {
@@ -251,9 +207,11 @@ try {
         timestamp: new Date().toISOString(),
     });
 
-    // ── STEP 8: Save to Airtable ──
+    // ──────────────────────────────
+    // SAVE TO AIRTABLE
+    // ──────────────────────────────
     try {
-        log.info('STEP 8: Saving to Airtable...');
+        log.info('Saving to Airtable...');
 
         const now = new Date();
         const timeOfRequest = now.toLocaleString('en-US', {
@@ -277,7 +235,7 @@ try {
                     time_of_request             : timeOfRequest,
                     service_request_tag_name    : tagBaseName,
                     service_request_size        : cleanedUrls.length,
-                    service_request_credits_cost: creditsCost,
+                    service_cost: creditsCost,
                     service_request_url         : driveLink
                 }
             },
@@ -290,17 +248,17 @@ try {
         );
 
         if (atRes.data && atRes.data.id) {
-            log.info(`STEP 8: Airtable record saved! ID: ${atRes.data.id}`);
+            log.info(`✅ Airtable record saved! ID: ${atRes.data.id}`);
         } else {
-            log.warning(`STEP 8: Airtable error: ${JSON.stringify(atRes.data)}`);
+            log.warning(`❌ Airtable error: ${JSON.stringify(atRes.data)}`);
         }
 
     } catch (atError) {
-        log.warning(`STEP 8 FAILED - Airtable error: ${atError.message} | Status: ${atError?.response?.status} | Body: ${JSON.stringify(atError?.response?.data)}`);
-    }
+        log.warning(`❌ Airtable save failed: ${atError.message}`);
+    };
 
 } catch (error) {
-    log.error(`FATAL ERROR: ${error.message}`);
+    log.error(`Error: ${error.message}`);
 
     const kvStore = await Actor.openKeyValueStore();
     await kvStore.setValue('ERROR', {
