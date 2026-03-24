@@ -1,15 +1,12 @@
 import { Actor } from 'apify';
-import fetch from 'node-fetch';
 
 await Actor.init();
 
-// Get input from Apify UI
 const input = await Actor.getInput();
 
 const fileName = input.fileName;
 const profileUrls = input.profileUrls;
 
-// Your Apps Script URL
 const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbyHsvED6vYA0SQf_HgsQ09o4Kn88YwOKai7BFIJ9Ioa_Bsiavlw8Xq0u8J_xf1XFKQAyw/exec";
 
 try {
