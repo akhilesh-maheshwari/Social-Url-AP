@@ -23,19 +23,19 @@ const serviceTagName = fileName;
 const rowCount       = profileUrls.length;
 const creditsCost    = parseFloat((rowCount * 0.01).toFixed(2));
 
-const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbyHsvED6vYA0SQf_HgsQ09o4Kn88YwOKai7BFIJ9Ioa_Bsiavlw8Xq0u8J_xf1XFKQAyw/exec";
+const GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbyHsvED6vYA0SQf_HgsQ09o4Kn88YwOKai7BFIJ9Ioa_Bsiavlw8Xq0u8J_xf1XFKQAyw/exec";
 
 // ── 1. Google Sheet ──────────────────────────────────────────────────────────
 let driveLink = '';
 try {
-    const response = await fetch(WEBHOOK_URL, {
+    const response = await fetch(GOOGLE_SHEET_URL, {
         method : "POST",
         headers: { "Content-Type": "application/json" },
         body   : JSON.stringify({ fileName, urls: profileUrls })
     });
     const result = await response.json();
     console.log("Google Sheet Response:", result);
-    driveLink = result.fileLink ?? ''; // ✅ grab drive link from Google Sheet response
+    driveLink = result.fileLink ?? '';
 } catch (error) {
     console.log("Error sending data to Google Sheet:", error);
 }
@@ -74,36 +74,41 @@ try {
         const airtableResult = await airtableResponse.json();
         console.log("✅ Airtable Record Created:", airtableResult.id);
     }
-console.log('Sending to Webhook...');
-const webhookRes = await fetch(
-    'https://s1.boomerangserver.co.in/webhook/private-profiles-scraper',
-    {
-        method : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body   : JSON.stringify({
-            request_unique_id        : runId,
-            time_of_request          : time,
-            service_name             : 'Linkedin Profile Scraper',
-            service_request_tag_name : serviceTagName,
-            service_request_size     : rowCount,
-            service_request_url      : driveLink,
-            source                   : 'ap',
-        })
-    }
-);
-
-console.log('Webhook status:', webhookRes.status);
-const webhookText = await webhookRes.text();
-console.log('Webhook response:', webhookText);
-
-if (webhookRes.status === 200) {
-    console.log('✅ Webhook sent successfully!');
-} else {
-    console.log('❌ Webhook error:', webhookText);
+} catch (error) {
+    console.log("Error sending data to Airtable:", error);
 }
 
-await Actor.exit();
-    console.log("Error sending data to Airtable:", error);
+// ── 3. Webhook ───────────────────────────────────────────────────────────────
+console.log('Sending to Webhook...');
+try {
+    const webhookRes = await fetch(
+        'https://s1.boomerangserver.co.in/webhook/private-profiles-scraper',
+        {
+            method : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body   : JSON.stringify({
+                request_unique_id        : runId,
+                time_of_request          : time,
+                service_name             : 'Linkedin Profile Scraper',
+                service_request_tag_name : serviceTagName,
+                service_request_size     : rowCount,
+                service_request_url      : driveLink,
+                source                   : 'ap',
+            })
+        }
+    );
+
+    console.log('Webhook status:', webhookRes.status);
+    const webhookText = await webhookRes.text();
+    console.log('Webhook response:', webhookText);
+
+    if (webhookRes.status === 200) {
+        console.log('✅ Webhook sent successfully!');
+    } else {
+        console.log('❌ Webhook error:', webhookText);
+    }
+} catch (error) {
+    console.log('❌ Webhook error:', error);
 }
 
 await Actor.exit();
