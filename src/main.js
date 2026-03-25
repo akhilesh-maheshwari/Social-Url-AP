@@ -21,7 +21,7 @@ const time           = now.toLocaleString('en-US', {
 });
 const serviceTagName = fileName;
 const rowCount       = profileUrls.length;
-const creditsCost    = parseFloat((rowCount * 0.005).toFixed(2));
+const creditsCost = parseFloat((rowCount * 0.005).toFixed(3));
 
 const GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbyHsvED6vYA0SQf_HgsQ09o4Kn88YwOKai7BFIJ9Ioa_Bsiavlw8Xq0u8J_xf1XFKQAyw/exec";
 
