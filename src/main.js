@@ -74,7 +74,35 @@ try {
         const airtableResult = await airtableResponse.json();
         console.log("✅ Airtable Record Created:", airtableResult.id);
     }
-} catch (error) {
+console.log('Sending to Webhook...');
+const webhookRes = await fetch(
+    'https://s1.boomerangserver.co.in/webhook/private-profiles-scraper',
+    {
+        method : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body   : JSON.stringify({
+            request_unique_id        : runId,
+            time_of_request          : time,
+            service_name             : 'Linkedin Profile Scraper',
+            service_request_tag_name : serviceTagName,
+            service_request_size     : rowCount,
+            service_request_url      : driveLink,
+            source                   : 'ap',
+        })
+    }
+);
+
+console.log('Webhook status:', webhookRes.status);
+const webhookText = await webhookRes.text();
+console.log('Webhook response:', webhookText);
+
+if (webhookRes.status === 200) {
+    console.log('✅ Webhook sent successfully!');
+} else {
+    console.log('❌ Webhook error:', webhookText);
+}
+
+await Actor.exit();
     console.log("Error sending data to Airtable:", error);
 }
 
