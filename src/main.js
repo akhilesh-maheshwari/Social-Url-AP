@@ -83,7 +83,7 @@ try {
     // ── 3. Webhook ───────────────────────────────────────────────────────────
     console.log('Sending to Webhook...');
     const webhookRes = await fetch(
-        'https://s1.boomerangserver.co.in/webhook/private-profiles-scraper',
+        'https://s1.boomerangserver.co.in/webhook/15663bd4-b260-49a7-af01-8e0ada511bf7',
         {
             method : 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -128,7 +128,7 @@ try {
         console.log(`\n🔄 Poll attempt #${pollCount}...`);
 
         const statsRes = await fetch(
-            `https://s1.boomerangserver.co.in/webhook/private-profile-export-request-stats?request_id=${requestId}`,
+            `https://s1.boomerangserver.co.in/webhook/private-profile-scraper-stats?request_id=${requestId}`,
             {
                 method : 'GET',
                 headers: { 'Content-Type': 'application/json' }
