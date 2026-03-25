@@ -156,33 +156,4 @@ try {
         }
     }
 
-    // ── 6. Output Webhook ─────────────────────────────────────────────────────
-    if (isCompleted) {
-        console.log('\nSending to output webhook...');
-
-        const outputRes = await fetch(
-            `https://s1.boomerangserver.co.in/webhook/waterfalls-request-output?request_id=${requestId}`,
-            {
-                method : 'GET',
-                headers: { 'Content-Type': 'application/json' }
-            }
-        );
-
-        console.log('Output webhook status:', outputRes.status);
-        const outputText = await outputRes.text();
-        console.log('Output webhook response:', outputText);
-
-        if (outputRes.status === 200) {
-            console.log('✅ Output webhook sent successfully!');
-        } else {
-            console.log('❌ Output webhook error:', outputText);
-        }
-    } else {
-        console.log('⚠️ Skipping output webhook — request did not complete.');
-    }
-
-} catch (err) {
-    console.log('❌ Error:', err.message);
-}
-
 await Actor.exit();
