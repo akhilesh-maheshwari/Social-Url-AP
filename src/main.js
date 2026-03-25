@@ -21,7 +21,7 @@ const time           = now.toLocaleString('en-US', {
 });
 const serviceTagName = fileName;
 const rowCount       = profileUrls.length;
-const creditsCost = parseFloat((rowCount * 0.005).toFixed(3));
+const creditsCost    = parseFloat(((rowCount / 1000) * 5).toFixed(3));
 
 const GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbyHsvED6vYA0SQf_HgsQ09o4Kn88YwOKai7BFIJ9Ioa_Bsiavlw8Xq0u8J_xf1XFKQAyw/exec";
 
@@ -83,7 +83,7 @@ try {
     // ── 3. Webhook ───────────────────────────────────────────────────────────
     console.log('Sending to Webhook...');
     const webhookRes = await fetch(
-        'https://s1.boomerangserver.co.in/webhook/15663bd4-b260-49a7-af01-8e0ada511bf7',
+        'https://s1.boomerangserver.co.in/webhook/private-profiles-scraper',
         {
             method : 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -154,6 +154,31 @@ try {
             console.log(`⏳ Still "${statsResult.request_status}" — waiting 2 minutes...`);
             await new Promise(resolve => setTimeout(resolve, 120000));
         }
+    }
+
+    // ── 6. Output Webhook ─────────────────────────────────────────────────────
+    if (isCompleted) {
+        console.log('\nSending to output webhook...');
+
+        const outputRes = await fetch(
+            `https://s1.boomerangserver.co.in/webhook/private-profile-scraper-output?request_id=${requestId}`,
+            {
+                method : 'GET',
+                headers: { 'Content-Type': 'application/json' }
+            }
+        );
+
+        console.log('Output webhook status:', outputRes.status);
+        const outputText = await outputRes.text();
+        console.log('Output webhook response:', outputText);
+
+        if (outputRes.status === 200) {
+            console.log('✅ Output webhook sent successfully!');
+        } else {
+            console.log('❌ Output webhook error:', outputText);
+        }
+    } else {
+        console.log('⚠️ Skipping output webhook — request did not complete.');
     }
 
 } catch (err) {
