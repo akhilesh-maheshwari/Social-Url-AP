@@ -156,4 +156,8 @@ try {
         }
     }
 
+} catch (err) {
+    console.log('❌ Error:', err.message);
+}
+
 await Actor.exit();
