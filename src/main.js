@@ -50,7 +50,7 @@ try {
                     service_cost             : creditsCost,
                     service_request_url      : driveLink,
                     service_option_1         : 'linkedin',
-                    service_name             : 'Linkedin Profile Scraper 2',
+                    service_name             : 'Linkedin Profile Scraper',
                     request_source           : 'Linkedin_profile_scraper_AP',
                 }
             })
