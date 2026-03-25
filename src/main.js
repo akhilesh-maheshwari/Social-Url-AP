@@ -5,7 +5,7 @@ const input = await Actor.getInput();
 console.log("Full input:", JSON.stringify(input)); // debug log to verify field names
 
 const fileName    = input.fileName;
-const profileUrls = input.linkedInProfileUrls ?? input.profileUrls ?? input.urls ?? [];
+const profileUrls = input.linkedinUrls ?? [];
 
 const userId      = input.userId;
 const runId       = Actor.getEnv().actorRunId;
