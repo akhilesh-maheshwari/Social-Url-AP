@@ -2,16 +2,18 @@ import { Actor } from 'apify';
 await Actor.init();
 
 const input = await Actor.getInput();
-const fileName = input.fileName;
-const profileUrls = input.profileUrls;
+console.log("Full input:", JSON.stringify(input)); // debug log to verify field names
 
-const userId         = input.userId;
-const runId          = Actor.getEnv().actorRunId;
-const time           = new Date().toISOString();
-const serviceTagName = fileName;     
-const rowCount       = profileUrls.length;
-const creditsCost    = input.creditsCost;
-const driveLink      = input.driveLink;
+const fileName    = input.fileName;
+const profileUrls = input.linkedInProfileUrls ?? input.profileUrls ?? input.urls ?? [];
+
+const userId      = input.userId;
+const runId       = Actor.getEnv().actorRunId;
+const time        = new Date().toISOString();
+const serviceTagName = fileName;
+const rowCount    = profileUrls.length;
+const creditsCost = input.creditsCost;
+const driveLink   = input.driveLink;
 
 const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbyHsvED6vYA0SQf_HgsQ09o4Kn88YwOKai7BFIJ9Ioa_Bsiavlw8Xq0u8J_xf1XFKQAyw/exec";
 
