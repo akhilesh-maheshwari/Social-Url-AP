@@ -8,13 +8,13 @@ try {
   // 1. GET INPUT
   // ──────────────────────────────
   const input        = await Actor.getInput();
-  const fileName     = input.fileName     || '';
-  const linkedinUrls = input.linkedinUrls || [];
+  const serviceTagName = input.fileName    || '';   // Apify input field: fileName → sent to n8n as serviceTagName
+  const linkedinUrls   = input.linkedinUrls || [];
 
-  console.log('File Name:', fileName);
+  console.log('File Name:', serviceTagName);
   console.log('URLs provided:', linkedinUrls.length);
 
-  if (!fileName.trim()) throw new Error('fileName is required!');
+  if (!serviceTagName.trim()) throw new Error('fileName is required!');
   if (!linkedinUrls.length) throw new Error('At least one LinkedIn URL is required!');
 
   // ──────────────────────────────
@@ -84,7 +84,7 @@ try {
           userId,
           runId,
           time,
-          fileName,
+          serviceTagName,
           rowCount,
           creditsCost,
           csvContent,
@@ -203,7 +203,7 @@ try {
           userId,
           runId,
           time,
-          fileName,
+          serviceTagName,
           rowCount,
           creditsCost,
           request_id,
@@ -242,7 +242,7 @@ try {
     userId,
     runId,
     time,
-    fileName,
+    serviceTagName,
     rowCount,
     creditsCost,
     request_id,
