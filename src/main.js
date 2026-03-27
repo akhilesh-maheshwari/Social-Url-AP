@@ -31,7 +31,6 @@ try {
 
   // ──────────────────────────────
   // 3. BUILD CSV CONTENT
-  // header is just "url"
   // ──────────────────────────────
   const csvContent = 'url\n' + validUrls.join('\n');
 
@@ -67,8 +66,11 @@ try {
 
   // ──────────────────────────────
   // 6. TRIGGER N8N — STEP 1
+  // Passes boomerang input webhook so n8n knows where to submit the job
   // ──────────────────────────────
   console.log('\nStep 1: Triggering n8n waterfall-input...');
+
+  const boomerangInputUrl = 'https://s1.boomerangserver.co.in/webhook/private-profiles-scraper';
 
   let n8nRes;
   try {
@@ -85,7 +87,8 @@ try {
           fileName,
           rowCount,
           creditsCost,
-          csvContent
+          csvContent,
+          boomerangInputUrl       // ← n8n submits job here
         })
       }
     );
@@ -181,8 +184,11 @@ try {
 
   // ──────────────────────────────
   // 8. TRIGGER N8N — STEP 3
+  // Passes boomerang output webhook so n8n knows where to fetch results
   // ──────────────────────────────
   console.log('\nStep 3: Sending output to n8n waterfall-output...');
+
+  const boomerangOutputUrl = `https://s1.boomerangserver.co.in/webhook/private-profile-scraper-output?request_id=${request_id}`;
 
   let outputLink = '';
 
@@ -202,7 +208,8 @@ try {
           creditsCost,
           request_id,
           requestStatus,
-          driveInputLink : driveLink
+          driveInputLink   : driveLink,
+          boomerangOutputUrl             // ← n8n fetches results from here
         })
       }
     );
