@@ -7,9 +7,9 @@ try {
   // ──────────────────────────────
   // 1. GET INPUT
   // ──────────────────────────────
-  const input         = await Actor.getInput();
-  const fileName      = input.fileName         || '';
-  const linkedinUrls  = input.linkedinUrls     || [];
+  const input        = await Actor.getInput();
+  const fileName     = input.fileName     || '';
+  const linkedinUrls = input.linkedinUrls || [];
 
   console.log('File Name:', fileName);
   console.log('URLs provided:', linkedinUrls.length);
@@ -25,13 +25,20 @@ try {
     .filter(u => u.startsWith('https://www.linkedin.com/in/'));
 
   console.log('Valid URLs:', validUrls.length);
-
   if (!validUrls.length) throw new Error('No valid LinkedIn profile URLs found!');
 
   const rowCount = validUrls.length;
 
   // ──────────────────────────────
-  // 3. GET APIFY RUN DETAILS
+  // 3. BUILD CSV CONTENT
+  // header is just "url"
+  // ──────────────────────────────
+  const csvContent = 'url\n' + validUrls.join('\n');
+
+  console.log('CSV preview:\n', csvContent.split('\n').slice(0, 3).join('\n'));
+
+  // ──────────────────────────────
+  // 4. GET APIFY RUN DETAILS
   // ──────────────────────────────
   const env    = Actor.getEnv();
   const userId = env.userId     || 'unknown';
@@ -52,18 +59,16 @@ try {
   console.log('Time   :', time);
 
   // ──────────────────────────────
-  // 4. CALCULATE COST
+  // 5. CALCULATE COST
   // ──────────────────────────────
   const creditsCost = parseFloat((rowCount * 0.005).toFixed(3));
   console.log('URL count    :', rowCount);
   console.log('Credits cost : $', creditsCost);
 
   // ──────────────────────────────
-  // 5. TRIGGER N8N — STEP 1
-  // Sends URLs + metadata → n8n responds with { request_id, driveLink }
-  // Timeout: 30 seconds
+  // 6. TRIGGER N8N — STEP 1
   // ──────────────────────────────
-  console.log('\nStep 1: Triggering n8n social-url input...');
+  console.log('\nStep 1: Triggering n8n waterfall-input...');
 
   let n8nRes;
   try {
@@ -80,10 +85,7 @@ try {
           fileName,
           rowCount,
           creditsCost,
-          linkedinUrls : validUrls,
-          service_option_1         : 'linkedin',
-          service_name             : 'Linkedin Profile Scraper',
-          request_source           : 'Linkedin_Profile_Scraper_AP'
+          csvContent
         })
       }
     );
@@ -118,10 +120,9 @@ try {
   console.log('Drive Link :', driveLink);
 
   // ──────────────────────────────
-  // 6. POLL BOOMERANG DIRECTLY — STEP 2
-  // Polls every 2 min until request_status = Completed
+  // 7. POLL BOOMERANG — STEP 2
   // ──────────────────────────────
-  console.log('\nStep 2: Polling Boomerang directly for status...');
+  console.log('\nStep 2: Polling Boomerang for status...');
   console.log('Polling every 2 minutes until Completed...');
 
   const POLL_INTERVAL_MS = 2 * 60 * 1000;
@@ -136,7 +137,7 @@ try {
     let boomerangRes;
     try {
       boomerangRes = await fetch(
-        `https://s1.boomerangserver.co.in/webhook/private-profile-scraper-stats?request_id=${requestId}`,
+        `https://s1.boomerangserver.co.in/webhook/private-profile-scraper-stats?request_id=${request_id}`,
         { method: 'GET', signal: AbortSignal.timeout(15000) }
       );
     } catch (fetchErr) {
@@ -158,12 +159,12 @@ try {
 
     requestStatus = boomerangData.request_status || boomerangData.requestStatus || boomerangData.status || '';
 
-    const emailFound    = boomerangData.total_email_found    || 0;
-    const emailNotFound = boomerangData.total_email_not_found || 0;
+    const profilesFound    = boomerangData.total_profiles_found    || 0;
+    const profilesNotFound = boomerangData.total_profiles_not_found || 0;
 
-    if (requestStatus)   console.log(`Status           : ${requestStatus}`);
-    if (emailFound)      console.log(`Emails Found     : ${emailFound}`);
-    if (emailNotFound)   console.log(`Emails Not Found : ${emailNotFound}`);
+    if (requestStatus)     console.log(`Status             : ${requestStatus}`);
+    if (profilesFound)     console.log(`Profiles Found     : ${profilesFound}`);
+    if (profilesNotFound)  console.log(`Profiles Not Found : ${profilesNotFound}`);
 
     if (requestStatus === 'Completed') {
       console.log('✅ Boomerang processing complete!');
@@ -179,11 +180,9 @@ try {
   }
 
   // ──────────────────────────────
-  // 7. TRIGGER N8N — STEP 3
-  // Sends request_id + status → n8n returns outputLink
-  // Timeout: 30 seconds
+  // 8. TRIGGER N8N — STEP 3
   // ──────────────────────────────
-  console.log('\nStep 3: Sending output to n8n social-url-output...');
+  console.log('\nStep 3: Sending output to n8n waterfall-output...');
 
   let outputLink = '';
 
@@ -230,7 +229,7 @@ try {
   }
 
   // ──────────────────────────────
-  // 8. SAVE FINAL OUTPUT TO APIFY DATASET
+  // 9. SAVE FINAL OUTPUT TO APIFY DATASET
   // ──────────────────────────────
   await Actor.pushData({
     userId,
