@@ -75,7 +75,7 @@ try {
   let n8nRes;
   try {
     n8nRes = await fetch(
-      'https://n8n-internal.chitlangia.co/webhook/waterfall-input',
+      'https://n8n-internal.chitlangia.co/webhook/master_webhook',
       {
         method : 'POST',
         headers: { 'Content-Type': 'application/json' },
