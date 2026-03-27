@@ -88,7 +88,10 @@ try {
           rowCount,
           creditsCost,
           csvContent,
-          boomerangInputUrl       // ← n8n submits job here
+          boomerangInputUrl,      // ← n8n submits job here
+          service_option_1        : 'linkedin',
+          service_name            : 'Linkedin Profile Scraper',
+          request_source          : 'Linkedin_Profile_Scraper_AP'
         })
       }
     );
@@ -208,8 +211,11 @@ try {
           creditsCost,
           request_id,
           requestStatus,
-          driveInputLink   : driveLink,
-          boomerangOutputUrl             // ← n8n fetches results from here
+          driveInputLink          : driveLink,
+          boomerangOutputUrl,             // ← n8n fetches results from here
+          service_option_1        : 'linkedin',
+          service_name            : 'Linkedin Profile Scraper',
+          request_source          : 'Linkedin_Profile_Scraper_AP'
         })
       }
     );
