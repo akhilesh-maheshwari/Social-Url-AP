@@ -347,9 +347,13 @@ try {
 
       // ── Break if all done ──
       if (completedBatches >= total_batches) {
-        console.log('\n✅ All batches processed!');
-        // Call Workflow 2 once more to trigger false branch → updates apify_master → Completed
-        await getNextBatchJobs();
+        const anyFailed = batchResults.some(r => r.status !== 'Completed' || !r.output_url);
+        if (anyFailed) {
+          console.log('\n⚠️ Some batches did not complete successfully.');
+        } else {
+          // Call Workflow 2 once more to trigger false branch → updates apify_master → Completed
+          await getNextBatchJobs();
+        }
         break;
       }
 
@@ -367,14 +371,15 @@ try {
   // ──────────────────────────────
   // 7. FINAL SUMMARY
   // ──────────────────────────────
-  if (completedBatches > 0) {
+  const successLinks = allOutputLinks.filter(l => l);
+  if (successLinks.length > 0 && successLinks.length === total_batches) {
     console.log('\n════════════════════════════════════');
     console.log('🎉 ALL BATCHES COMPLETED!');
     console.log('════════════════════════════════════');
     console.log('Request ID    :', request_unique_id);
     console.log('Total Batches :', total_batches);
     console.log('\nOutput Links:');
-    allOutputLinks.forEach((link, i) => console.log(`  Batch ${i + 1} : ${link}`));
+    allOutputLinks.forEach((link, i) => console.log(`  Batch ${i + 1} : ${link || 'Failed'}`));
     console.log('════════════════════════════════════');
 
     await Actor.pushData({ status: 'completed', request_unique_id, total_batches, allOutputLinks });
