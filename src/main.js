@@ -7,15 +7,20 @@ try {
   // ──────────────────────────────
   // 1. GET INPUT
   // ──────────────────────────────
-  const input        = await Actor.getInput();
-  const serviceTagName = input.fileName    || '';   // Apify input field: fileName → sent to n8n as serviceTagName
+  const input          = await Actor.getInput();
+  const serviceTagName = input.fileName     || '';
   const linkedinUrls   = input.linkedinUrls || [];
+  const serviceName    = 'Linkedin Profile Scraper';
+  const serviceOption1 = 'linkedin';
+  const requestSource  = 'Linkedin_Profile_Scraper_AP';
+  const boomerangInputUrl = 'https://s1.boomerangserver.co.in/webhook/private-profiles-scraper';
 
-  console.log('File Name:', serviceTagName);
-  console.log('URLs provided:', linkedinUrls.length);
+  console.log('Tag Name :', serviceTagName);
+  console.log('Service  :', serviceName);
+  console.log('URLs     :', linkedinUrls.length);
 
   if (!serviceTagName.trim()) throw new Error('fileName is required!');
-  if (!linkedinUrls.length) throw new Error('At least one LinkedIn URL is required!');
+  if (!linkedinUrls.length)   throw new Error('At least one LinkedIn URL is required!');
 
   // ──────────────────────────────
   // 2. VALIDATE + CLEAN URLS
@@ -27,17 +32,14 @@ try {
   console.log('Valid URLs:', validUrls.length);
   if (!validUrls.length) throw new Error('No valid LinkedIn profile URLs found!');
 
-  const rowCount = validUrls.length;
-
-  // ──────────────────────────────
-  // 3. BUILD CSV CONTENT
-  // ──────────────────────────────
+  const rowCount   = validUrls.length;
   const csvContent = 'url\n' + validUrls.join('\n');
+  const fileName   = serviceTagName.replace(/[^a-zA-Z0-9]/g, '_') + '_' + new Date().toISOString().replace(/[:.]/g, '-') + '.csv';
 
   console.log('CSV preview:\n', csvContent.split('\n').slice(0, 3).join('\n'));
 
   // ──────────────────────────────
-  // 4. GET APIFY RUN DETAILS
+  // 3. GET APIFY RUN DETAILS
   // ──────────────────────────────
   const env    = Actor.getEnv();
   const userId = env.userId     || 'unknown';
@@ -53,33 +55,33 @@ try {
     timeZone: 'Asia/Kolkata'
   });
 
-  console.log('User ID:', userId);
-  console.log('Run ID :', runId);
-  console.log('Time   :', time);
+  console.log('User ID :', userId);
+  console.log('Run ID  :', runId);
+  console.log('Time    :', time);
 
   // ──────────────────────────────
-  // 5. CALCULATE COST
+  // 4. CALCULATE COST
   // ──────────────────────────────
   const creditsCost = parseFloat((rowCount * 0.005).toFixed(3));
   console.log('URL count    :', rowCount);
   console.log('Credits cost : $', creditsCost);
 
   // ──────────────────────────────
-  // 6. TRIGGER N8N — STEP 1
-  // Passes boomerang input webhook so n8n knows where to submit the job
+  // 5. STEP 1 — TRIGGER WORKFLOW 1
+  //    Setup folders, batches, NocoDB
   // ──────────────────────────────
-  console.log('\nStep 1: Triggering n8n waterfall-input...');
+  console.log('\n════════════════════════════════════');
+  console.log('Step 1 : Setting up master & batches');
+  console.log('════════════════════════════════════');
 
-  const boomerangInputUrl = 'https://s1.boomerangserver.co.in/webhook/private-profiles-scraper';
-
-  let n8nRes;
+  let wf1Res;
   try {
-    n8nRes = await fetch(
+    wf1Res = await fetch(
       'https://n8n-internal.chitlangia.co/webhook/master_webhook',
       {
         method : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        signal : AbortSignal.timeout(30000),
+        signal : AbortSignal.timeout(60000),
         body   : JSON.stringify({
           userId,
           runId,
@@ -88,180 +90,282 @@ try {
           rowCount,
           creditsCost,
           csvContent,
-          boomerangInputUrl,      // ← n8n submits job here
-          service_option_1        : 'linkedin',
-          service_name            : 'Linkedin Profile Scraper',
-          request_source          : 'Linkedin_Profile_Scraper_AP'
+          uploadedFile     : '',
+          fileName,
+          boomerangInputUrl,
+          service_option_1 : serviceOption1,
+          service_name     : serviceName,
+          request_source   : requestSource
         })
       }
     );
   } catch (fetchErr) {
-    throw new Error(`Step 1 fetch failed: ${fetchErr.message}`);
+    throw new Error(`Step 1 failed: ${fetchErr.message}`);
   }
 
-  console.log('n8n step 1 status:', n8nRes.status);
+  const wf1Text = await wf1Res.text();
+  console.log('n8n step 1 status  :', wf1Res.status);
+  console.log('n8n step 1 response:', wf1Text);
 
-  const n8nText = await n8nRes.text();
-  console.log('n8n step 1 raw response:', n8nText);
+  if (!wf1Res.ok) throw new Error(`Step 1 error ${wf1Res.status}: ${wf1Text.slice(0, 200)}`);
 
-  if (!n8nRes.ok) {
-    throw new Error(`Step 1 failed with status ${n8nRes.status}. Response: ${n8nText.slice(0, 200)}`);
-  }
-
-  let n8nData;
+  let wf1Data;
   try {
-    n8nData = JSON.parse(n8nText);
-  } catch (parseErr) {
-    throw new Error(`Step 1 JSON parse failed. Raw response: ${n8nText.slice(0, 200)}`);
+    wf1Data = JSON.parse(wf1Text);
+  } catch (e) {
+    throw new Error(`Step 1 JSON parse failed: ${wf1Text.slice(0, 200)}`);
   }
 
-  console.log('n8n step 1 response:', JSON.stringify(n8nData));
+  const request_unique_id = wf1Data.request_unique_id || '';
+  const masterFileUrl     = wf1Data.masterFileUrl     || '';
+  const total_batches     = parseInt(wf1Data.total_batches || '0');
+  const batchFolderId     = wf1Data.batchFolderId     || '';
 
-  const request_id = String(n8nData.request_id || '');
-  const driveLink  = n8nData.driveLink || '';
+  if (!request_unique_id) throw new Error('No request_unique_id returned from Step 1!');
 
-  if (!request_id) throw new Error('No request_id returned from n8n step 1!');
-
-  console.log('Request ID :', request_id);
-  console.log('Drive Link :', driveLink);
+  console.log('\n✅ Step 1 Complete!');
+  console.log('   Request ID    :', request_unique_id);
+  console.log('   Master File   :', masterFileUrl);
+  console.log('   Total Batches :', total_batches);
 
   // ──────────────────────────────
-  // 7. POLL BOOMERANG — STEP 2
+  // 6. STEP 2 — PROCESS BATCHES
+  //    5 batches at a time
   // ──────────────────────────────
-  console.log('\nStep 2: Polling Boomerang for status...');
-  console.log('Polling every 2 minutes until Completed...');
-
-  const POLL_INTERVAL_MS = 2 * 60 * 1000;
-  let requestStatus      = '';
-  let attempts           = 0;
+  let completedBatches = 0;
+  let round            = 0;
+  let allOutputLinks   = [];
 
   while (true) {
 
-    attempts++;
-    console.log(`\nPoll attempt ${attempts}...`);
+    round++;
+    const remaining = total_batches - completedBatches;
+    const thisRound = Math.min(5, remaining);
 
-    let boomerangRes;
+    console.log(`\n════════════════════════════════════`);
+    console.log(`Step 2 : Round ${round} — ${thisRound} batch(es)`);
+    console.log(`         Completed : ${completedBatches}/${total_batches}`);
+    console.log(`         Remaining : ${remaining}`);
+    console.log(`════════════════════════════════════`);
+
+    // ── 2a. Get pending batches from Workflow 2 ──
+    let wf2Res;
     try {
-      boomerangRes = await fetch(
-        `https://s1.boomerangserver.co.in/webhook/private-profile-scraper-stats?request_id=${request_id}`,
-        { method: 'GET', signal: AbortSignal.timeout(15000) }
+      wf2Res = await fetch(
+        'https://n8n-internal.chitlangia.co/webhook/batch-process',
+        {
+          method : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal : AbortSignal.timeout(60000),
+          body   : JSON.stringify({
+            request_unique_id,
+            batchFolderId,
+            userId,
+            runId,
+            time,
+            serviceTagName,
+            rowCount,
+            creditsCost,
+            boomerangInputUrl,
+            service_option_1 : serviceOption1,
+            service_name     : serviceName,
+            request_source   : requestSource
+          })
+        }
       );
     } catch (fetchErr) {
-      console.log(`Poll attempt ${attempts} fetch failed: ${fetchErr.message}, retrying in 2 min...`);
-      await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
-      continue;
+      throw new Error(`Step 2 Round ${round} failed: ${fetchErr.message}`);
     }
 
-    const boomerangText = await boomerangRes.text();
+    const wf2Text = await wf2Res.text();
+    console.log('n8n step 2 status  :', wf2Res.status);
+    console.log('n8n step 2 response:', wf2Text);
 
-    let boomerangData;
-    try {
-      boomerangData = JSON.parse(boomerangText);
-    } catch (e) {
-      console.log('Boomerang JSON parse failed, retrying in 2 min...');
-      await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
-      continue;
-    }
+    if (!wf2Res.ok) throw new Error(`Step 2 error ${wf2Res.status}: ${wf2Text.slice(0, 200)}`);
 
-    requestStatus = boomerangData.request_status || boomerangData.requestStatus || boomerangData.status || '';
-
-    const profilesFound    = boomerangData.total_profiles_found    || 0;
-    const profilesNotFound = boomerangData.total_profiles_not_found || 0;
-
-    if (requestStatus)     console.log(`Status             : ${requestStatus}`);
-    if (profilesFound)     console.log(`Profiles Found     : ${profilesFound}`);
-    if (profilesNotFound)  console.log(`Profiles Not Found : ${profilesNotFound}`);
-
-    if (requestStatus === 'Completed') {
-      console.log('✅ Boomerang processing complete!');
+    // Handle empty response
+    if (!wf2Text || wf2Text.trim() === '') {
+      console.log('✅ No more pending batches. All done!');
       break;
     }
 
-    console.log(requestStatus
-      ? `Waiting 2 minutes... (${requestStatus})`
-      : 'No status returned yet, retrying in 2 min...'
-    );
-
-    await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
-  }
-
-  // ──────────────────────────────
-  // 8. TRIGGER N8N — STEP 3
-  // Passes boomerang output webhook so n8n knows where to fetch results
-  // ──────────────────────────────
-  console.log('\nStep 3: Sending output to n8n waterfall-output...');
-
-  const boomerangOutputUrl = `https://s1.boomerangserver.co.in/webhook/private-profile-scraper-output?request_id=${request_id}`;
-
-  let outputLink = '';
-
-  try {
-    const outputRes = await fetch(
-      'https://n8n-internal.chitlangia.co/webhook/waterfall-output',
-      {
-        method : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal : AbortSignal.timeout(30000),
-        body   : JSON.stringify({
-          userId,
-          runId,
-          time,
-          serviceTagName,
-          rowCount,
-          creditsCost,
-          request_id,
-          requestStatus,
-          driveInputLink          : driveLink,
-          boomerangOutputUrl,             // ← n8n fetches results from here
-          service_option_1        : 'linkedin',
-          service_name            : 'Linkedin Profile Scraper',
-          request_source          : 'Linkedin_Profile_Scraper_AP'
-        })
-      }
-    );
-
-    const outputText = await outputRes.text();
-    console.log('n8n step 3 status:', outputRes.status);
-    console.log('n8n step 3 raw response:', outputText);
-
-    if (outputRes.ok) {
-      try {
-        const outputData = JSON.parse(outputText);
-        outputLink = outputData.driveOutputLink || outputData['Output Link'] || outputData.outputLink || outputData.webViewLink || '';
-        if (outputLink) console.log('Output Link:', outputLink);
-      } catch (e) {
-        console.log('Step 3 JSON parse failed, continuing...');
-      }
-    } else {
-      console.log(`Warning: Step 3 returned status ${outputRes.status}, continuing...`);
+    let wf2Data;
+    try {
+      wf2Data = JSON.parse(wf2Text);
+    } catch (e) {
+      console.log('Step 2 response not JSON, exiting loop.');
+      break;
     }
 
-  } catch (fetchErr) {
-    console.log(`Warning: Step 3 fetch failed: ${fetchErr.message}`);
-    console.log('Continuing to save output anyway...');
+    const batchJobs = wf2Data.batchJobs || [];
+
+    if (batchJobs.length === 0) {
+      console.log('✅ No more pending batches. All done!');
+      break;
+    }
+
+    // ── 2b. Poll Boomerang for each batch ──
+    console.log(`\nPolling Boomerang status every 2 minutes...`);
+
+    const POLL_INTERVAL_MS = 2 * 60 * 1000;
+    const batchResults     = [];
+
+    for (const job of batchJobs) {
+
+      const { request_id, driveInputLink, batch_number, nocodb_id } = job;
+
+      console.log(`\n  ⏳ Batch ${batch_number} — Polling (request_id: ${request_id})...`);
+
+      let requestStatus  = '';
+      let profilesFound     = 0;
+      let profilesNotFound  = 0;
+      let pollAttempts   = 0;
+
+      while (true) {
+
+        pollAttempts++;
+
+        let statsRes;
+        try {
+          statsRes = await fetch(
+            `https://s1.boomerangserver.co.in/webhook/private-profile-scraper-stats?request_id=${request_id}`,
+            { method: 'GET', signal: AbortSignal.timeout(15000) }
+          );
+        } catch (fetchErr) {
+          console.log(`  Batch ${batch_number} poll ${pollAttempts} failed: ${fetchErr.message}, retrying...`);
+          await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+          continue;
+        }
+
+        const statsText = await statsRes.text();
+        let statsData;
+        try {
+          statsData = JSON.parse(statsText);
+        } catch (e) {
+          console.log(`  Batch ${batch_number} stats parse failed, retrying...`);
+          await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+          continue;
+        }
+
+        requestStatus    = statsData.request_status || statsData.requestStatus || statsData.status || '';
+        profilesFound    = statsData.total_profiles_found    || 0;
+        profilesNotFound = statsData.total_profiles_not_found || 0;
+
+        console.log(`  Batch ${batch_number} | Status: ${requestStatus || 'Pending'} | Found: ${profilesFound} | Not Found: ${profilesNotFound}`);
+
+        if (requestStatus === 'Completed') {
+          console.log(`  ✅ Batch ${batch_number} complete!`);
+          break;
+        }
+
+        await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+      }
+
+      // ── 2c. Call waterfall-output webhook ──
+      const boomerangOutputUrl = `https://s1.boomerangserver.co.in/webhook/private-profile-scraper-output?request_id=${request_id}`;
+
+      let outputLink = '';
+      try {
+        const outputRes = await fetch(
+          'https://n8n-internal.chitlangia.co/webhook/waterfall-output',
+          {
+            method : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal : AbortSignal.timeout(60000),
+            body   : JSON.stringify({
+              userId,
+              runId,
+              time,
+              serviceTagName,
+              rowCount      : job.batch_size || rowCount,
+              creditsCost,
+              request_id,
+              requestStatus,
+              driveInputLink,
+              boomerangOutputUrl,
+              nocodb_id,
+              batch_number,
+              request_unique_id,
+              batchFolderId,
+              service_option_1 : serviceOption1,
+              service_name     : serviceName,
+              request_source   : requestSource
+            })
+          }
+        );
+
+        const outputText = await outputRes.text();
+        if (outputRes.ok) {
+          try {
+            const outputData = JSON.parse(outputText);
+            outputLink = outputData['Output Link'] || outputData.outputLink || outputData.driveOutputLink || outputData.webViewLink || '';
+          } catch (e) {
+            console.log(`  Batch ${batch_number} output parse failed, continuing...`);
+          }
+        } else {
+          console.log(`  Batch ${batch_number} output webhook returned ${outputRes.status}`);
+        }
+      } catch (fetchErr) {
+        console.log(`  Batch ${batch_number} output webhook failed: ${fetchErr.message}`);
+      }
+
+      batchResults.push({
+        batch_number,
+        request_id,
+        status           : requestStatus,
+        profiles_found   : profilesFound,
+        profiles_not_found: profilesNotFound,
+        output_url       : outputLink
+      });
+
+      allOutputLinks.push(outputLink);
+    }
+
+    // ── 2d. Log round results ──
+    console.log(`\n✅ Round ${round} Results:`);
+    for (const result of batchResults) {
+      console.log(`\n   📦 Batch ${result.batch_number}`);
+      console.log(`      Request ID       : ${result.request_id}`);
+      console.log(`      Status           : ${result.status}`);
+      console.log(`      Profiles Found   : ${result.profiles_found}`);
+      console.log(`      Profiles Missing : ${result.profiles_not_found}`);
+      console.log(`      Output Link      : ${result.output_url}`);
+    }
+
+    completedBatches += batchResults.length;
+
+    // Save round to Apify dataset
+    await Actor.pushData({
+      round,
+      request_unique_id,
+      completedBatches,
+      total_batches,
+      batchResults
+    });
+
+    if (completedBatches < total_batches) {
+      console.log(`\n⏳ ${total_batches - completedBatches} batch(es) remaining. Starting next round...`);
+    }
   }
 
   // ──────────────────────────────
-  // 9. SAVE FINAL OUTPUT TO APIFY DATASET
+  // 7. FINAL SUMMARY
   // ──────────────────────────────
-  await Actor.pushData({
-    userId,
-    runId,
-    time,
-    serviceTagName,
-    rowCount,
-    creditsCost,
-    request_id,
-    driveInputLink  : driveLink,
-    driveOutputLink : outputLink,
-    requestStatus
-  });
+  console.log('\n════════════════════════════════════');
+  console.log('🎉 ALL BATCHES COMPLETED!');
+  console.log('════════════════════════════════════');
+  console.log('Request ID    :', request_unique_id);
+  console.log('Total Batches :', total_batches);
+  console.log('\nOutput Links:');
+  allOutputLinks.forEach((link, i) => console.log(`  Batch ${i + 1} : ${link}`));
+  console.log('════════════════════════════════════');
 
-  console.log('\n✅ Final output saved!');
-  console.log('Request ID   :', request_id);
-  console.log('Input Link   :', driveLink);
-  if (outputLink) console.log('Output Link  :', outputLink);
-  console.log('Status       :', requestStatus);
+  await Actor.pushData({
+    status           : 'completed',
+    request_unique_id,
+    total_batches,
+    allOutputLinks
+  });
 
 } catch (err) {
   console.log('❌ Error:', err.message);
