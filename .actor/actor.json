@@ -1,10 +1,13 @@
 {
   "actorSpecification": 1,
-  "name": "Linkedin Profile Scraper 2",
-  "version": "0.0",
+  "name": "Linkedin-Profile-Scraper-2",
+  "title": "Linkedin Profile Scraper 2",
+  "version": "0.1",
   "buildTag": "latest",
-  "environmentVariables": {},
   "dockerfile": "./Dockerfile",
-  "timeoutSecs": 0,
-  "memoryMbytes": 1024
+  "defaultRunOptions": {
+    "build": "latest",
+    "timeoutSecs": 0,
+    "memoryMbytes": 1024
+  }
 }
