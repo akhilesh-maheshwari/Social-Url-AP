@@ -1,14 +1,10 @@
 {
   "actorSpecification": 1,
-  "name": "linkedin-profile-scraper",
-  "title": "LinkedIn Profile Scraper",
-  "description": "Submit LinkedIn profile URLs for enrichment. Results are processed via webhook and returned as a downloadable file.",
-  "version": "1.0",
-  "input": "./INPUT_SCHEMA.json",
+  "name": "Linkedin Profile Scraper 2",
+  "version": "0.0",
+  "buildTag": "latest",
+  "environmentVariables": {},
   "dockerfile": "./Dockerfile",
-  "defaultRunOptions": {
-    "build": "latest",
-    "timeoutSecs": 0,
-    "memoryMbytes": 1024
-  }
+  "timeoutSecs": 0,
+  "memoryMbytes": 1024
 }
