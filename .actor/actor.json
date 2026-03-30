@@ -1,7 +1,7 @@
 {
   "actorSpecification": 1,
-  "name": "Linkedin-Profile-Scraper-2",
-  "title": "Linkedin Profile Scraper 2",
+  "name": "Linkedin-Profile-Scraper",
+  "title": "LinkedIn Profile Scraper (No Cookies)",
   "version": "0.1",
   "buildTag": "latest",
   "dockerfile": "./Dockerfile",
