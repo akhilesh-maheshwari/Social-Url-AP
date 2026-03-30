@@ -13,7 +13,7 @@ try {
   const serviceName    = 'Linkedin Profile Scraper';
   const serviceOption1 = 'linkedin';
   const requestSource  = 'Linkedin_Profile_Scraper_AP';
-  const boomerangInputUrl = 'https://s1.boomerangserver.co.in/webhook/private-profiles-scraper';
+  const boomerangInputUrl = 'https://s1.boomerangserver.co.in/webhook/15663bd4-b260-49a7-af01-8e0ada511bf7';
   const boomerangStatUrl  = 'https://s1.boomerangserver.co.in/webhook/private-profile-scraper-stats';
 
   console.log('Tag Name :', serviceTagName);
@@ -209,7 +209,7 @@ try {
                   headers: { 'Content-Type': 'application/json' },
                   signal : AbortSignal.timeout(60 * 60 * 1000),
                   body   : JSON.stringify({
-                    request_id,
+                    request_id   : job.batch_id,
                     batch_number,
                     nocodb_id,
                     driveInputLink,
@@ -274,7 +274,7 @@ try {
           continue;
         }
 
-        const boomerangOutputUrl = `https://s1.boomerangserver.co.in/webhook/private-profile-scraper-output?request_id=${request_id}`;
+        const boomerangOutputUrl = `https://s1.boomerangserver.co.in/webhook/private-profile-scraper-output?batch_id=${job.batch_id}`;
 
         let outputLink = '';
         try {
@@ -291,7 +291,7 @@ try {
                 serviceTagName,
                 rowCount         : job.batch_size || rowCount,
                 creditsCost,
-                request_id,
+                request_id       : job.batch_id,
                 requestStatus    : result.status,
                 driveInputLink,
                 boomerangOutputUrl,
