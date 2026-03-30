@@ -209,10 +209,9 @@ try {
                   headers: { 'Content-Type': 'application/json' },
                   signal : AbortSignal.timeout(60 * 60 * 1000),
                   body   : JSON.stringify({
-                    request_id,           // ✅ FIXED: was job.batch_id (undefined), now job.request_id
+                    request_id,
                     batch_number,
-                    nocodb_master_id,
-                    batch_id     : nocodb_id,  // ✅ FIXED: use nocodb_id from batchJob
+                    nocodb_id,
                     driveInputLink,
                     request_unique_id,
                     batchFolderId,
@@ -275,7 +274,7 @@ try {
           continue;
         }
 
-        const boomerangOutputUrl = `https://s1.boomerangserver.co.in/webhook/private-profile-scraper-output`;
+        const boomerangOutputUrl = `https://s1.boomerangserver.co.in/webhook/private-profile-scraper-output?request_id=${request_id}`;
 
         let outputLink = '';
         try {
@@ -292,12 +291,11 @@ try {
                 serviceTagName,
                 rowCount         : job.batch_size || rowCount,
                 creditsCost,
-                request_id,           // ✅ FIXED: was job.batch_id (undefined), now job.request_id
+                request_id,
                 requestStatus    : result.status,
                 driveInputLink,
                 boomerangOutputUrl,
-                nocodb_master_id,
-                batch_id         : nocodb_id,  // ✅ FIXED: use nocodb_id from batchJob
+                nocodb_id,
                 batch_number,
                 request_unique_id,
                 batchFolderId,
