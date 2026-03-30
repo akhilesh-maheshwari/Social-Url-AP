@@ -211,7 +211,7 @@ try {
                   body   : JSON.stringify({
                     request_id   : job.batch_id,
                     batch_number,
-                    nocodb_id,
+                    nocodb_master_id,,
                     batch_id,
                     driveInputLink,
                     request_unique_id,
@@ -275,7 +275,7 @@ try {
           continue;
         }
 
-        const boomerangOutputUrl = `https://s1.boomerangserver.co.in/webhook/private-profile-scraper-output?batch_id=${job.batch_id}`;
+        const boomerangOutputUrl = `https://s1.boomerangserver.co.in/webhook/private-profile-scraper-output`;
 
         let outputLink = '';
         try {
@@ -296,7 +296,8 @@ try {
                 requestStatus    : result.status,
                 driveInputLink,
                 boomerangOutputUrl,
-                nocodb_id,
+                nocodb_master_id,
+                batch_id,
                 batch_number,
                 request_unique_id,
                 batchFolderId,
