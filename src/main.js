@@ -209,10 +209,10 @@ try {
                   headers: { 'Content-Type': 'application/json' },
                   signal : AbortSignal.timeout(60 * 60 * 1000),
                   body   : JSON.stringify({
-                    request_id   : job.batch_id,
+                    request_id,           // ✅ FIXED: was job.batch_id (undefined), now job.request_id
                     batch_number,
                     nocodb_master_id,
-                    batch_id,
+                    batch_id     : nocodb_id,  // ✅ FIXED: use nocodb_id from batchJob
                     driveInputLink,
                     request_unique_id,
                     batchFolderId,
@@ -292,12 +292,12 @@ try {
                 serviceTagName,
                 rowCount         : job.batch_size || rowCount,
                 creditsCost,
-                request_id       : job.batch_id,
+                request_id,           // ✅ FIXED: was job.batch_id (undefined), now job.request_id
                 requestStatus    : result.status,
                 driveInputLink,
                 boomerangOutputUrl,
                 nocodb_master_id,
-                batch_id,
+                batch_id         : nocodb_id,  // ✅ FIXED: use nocodb_id from batchJob
                 batch_number,
                 request_unique_id,
                 batchFolderId,
