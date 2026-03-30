@@ -212,6 +212,7 @@ try {
                     request_id   : job.batch_id,
                     batch_number,
                     nocodb_id,
+                    batch_id,
                     driveInputLink,
                     request_unique_id,
                     batchFolderId,
