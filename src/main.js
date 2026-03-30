@@ -211,7 +211,7 @@ try {
                   body   : JSON.stringify({
                     request_id   : job.batch_id,
                     batch_number,
-                    nocodb_master_id,,
+                    nocodb_master_id,
                     batch_id,
                     driveInputLink,
                     request_unique_id,
