@@ -1,96 +1,95 @@
-# LinkedIn Profile Scraper
-A powerful Apify Actor that enriches LinkedIn profiles with comprehensive data extraction, email discovery, and mobile number lookup capabilities.
+# 🧠 LinkedIn Profile Complete Export
 
-## Overview
-The LinkedIn Profile Scraper is an enterprise-grade Apify Actor designed to extract comprehensive information from LinkedIn profiles. It automatically enriches profile data with contact information, work history, education, skills, and more, making it an essential tool for lead generation, recruitment, market research, and sales outreach.
+Extract complete LinkedIn profile-level data from profile URLs including work experience, education, skills, recommendations, languages, and additional metadata. Designed for deep enrichment, recruiting intelligence, research, and advanced outreach workflows.
 
-Key Highlights:
-- No LinkedIn Cookies Required – Operates without authentication cookies
-- Bulk Processing – Process multiple profiles concurrently
-- Smart Email Discovery – Automatically attempts to find email addresses
-- Mobile Number Lookup – Exclusive mobile number enrichment for paying users
-- Structured Output – Returns normalized, consistent data format
+No login cookies required.
 
-## Features
-### Comprehensive Profile Data
-Extracts complete profile information including:
-- Personal Information: Full name, headline, summary, profile pictures, location
-- Work Experience: Current and past positions, companies, job descriptions, durations
-- Education: Universities, degrees, fields of study, graduation dates
-- Skills & Endorsements: Skills and endorsement counts
-- Additional Data: Languages, certifications, publications, patents, volunteer work, recommendations
+---
 
-### Company Intelligence
-Automatically gathers company information from job history:
-- Company name, industry, website, LinkedIn URL
-- Company size (headcount range)
-- Founded year and company identifiers
+## 📌 Data Fields Included
 
-### Contact Enrichment
-- Email Discovery: Automatically attempts to find email addresses of the person
-- Mobile Number Lookup: For paying users, attempts to find mobile phone numbers
+| Field                   | Description                                                                      |
+| ----------------------- | -------------------------------------------------------------------------------- |
+| publicIdentifier        | Public LinkedIn profile username (profile slug)                                  |
+| linkedInIdentifier      | Internal LinkedIn profile identifier                                             |
+| memberIdentifier        | Unique LinkedIn member ID                                                        |
+| linkedInUrl             | Direct LinkedIn profile URL                                                      |
+| firstName               | Member first name                                                                |
+| lastName                | Member last name                                                                 |
+| headline                | Profile headline                                                                 |
+| summary                 | About section description                                                        |
+| location                | Profile location                                                                 |
+| followerCount           | Total number of followers                                                        |
+| premium                 | Indicates if the member has LinkedIn Premium                                     |
+| is_open_profile         | Can receive messages without connection                                          |
+| is_creator              | Creator mode enabled status                                                      |
+| is_influencer           | Influencer badge status                                                          |
+| is_self                 | Indicates whether profile belongs to logged-in user                              |
+| is_relationship         | Relationship indicator between viewer and member                                 |
+| websites                | Websites listed on the profile                                                   |
+| connections_count       | Total number of connections                                                      |
+| birthdate               | Birthdate (if available)                                                         |
+| positions               | Full work experience history including company, title, duration, and description |
+| schools                 | Education history including institutes, degrees, and fields of study             |
+| skills                  | Skills listed on the profile with endorsements where available                   |
+| languages               | Languages listed on the profile                                                  |
+| recommendations         | Recommendations received or given on the profile                                 |
+| volunteering_experience | Volunteer work and associated organizations                                      |
+| photoUrl                | Profile image URL                                                                |
+| backgroundUrl           | Cover image URL                                                                  |
+| request_type            | Type of extraction request processed                                             |
 
-### Performance & Reliability
-- Concurrent Processing: Processes multiple profiles in parallel
-- Error Handling: Graceful error handling with detailed logging
-- URL Validation: Automatic validation and normalization of LinkedIn URLs
+---
 
-## Quick Start
-1. Get Started: Create an Apify account if you don't have one
-2. Prepare URLs: Collect the LinkedIn profile URLs you want to enrich
-3. Run the Actor: Use the Apify Console UI to run the actor with your profile URLs and a file name
-4. Download Results: Access your results via the generated Google Drive link
+## 📊 Sample Output
 
-## Usage
-### Prerequisites
-- An Apify account
-- LinkedIn profile URLs you want to enrich
-
-### Input Format
-The actor accepts a JSON input with an array of LinkedIn profile URLs and a target file name:
 ```json
 {
-  "fileName": "MyLeads",
-  "linkedinUrls": [
-    "https://www.linkedin.com/in/williamhgates",
-    "https://www.linkedin.com/in/jeannie-wyrick-b4760710a"
+  "publicIdentifier": "john-doe",
+  "linkedInIdentifier": "ACoAAAB1234",
+  "memberIdentifier": "123456789",
+  "linkedInUrl": "https://www.linkedin.com/in/john-doe/",
+  "firstName": "John",
+  "lastName": "Doe",
+  "headline": "Senior Product Manager",
+  "summary": "Experienced product leader with strong background in SaaS",
+  "location": "London, United Kingdom",
+  "followerCount": 3200,
+  "connections_count": 1500,
+  "skills": ["Product Strategy","SaaS","Growth"],
+  "languages": ["English"],
+  "positions": [
+    {
+      "company": "TechCorp",
+      "title": "Senior Product Manager"
+    }
   ]
 }
 ```
 
-### Running the Actor
-#### Option 1: Apify Console (Recommended)
-1. Navigate to the actor on Apify Console
-2. Enter your LinkedIn profile URLs and the desired file name
-3. Click Start to begin the enrichment process
+---
 
-#### Option 2: API
-```bash
-curl -X POST \
-  'https://api.apify.com/v2/acts/linkedin-profile-scraper/runs?token=YOUR_API_TOKEN' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "fileName": "leads_export",
-    "linkedinUrls": [
-      "https://www.linkedin.com/in/williamhgates"
-    ]
-  }'
-```
+## 💰 Pricing
 
-## Pricing
-The actor is priced at $15 per 1,000 successful requests ($0.015 per profile).
+LinkedIn Profile Complete Export is available on a pay-per-result basis:
 
-## Output
-The actor generates an Excel file containing the requested profiles and uploads it to Google Drive. Once processed, you will receive a secure link to download your enriched data.
+**$5.00 per 1,000 profiles → just $0.005 per profile**
 
-The enriched data includes:
-- Main Profile Data: Full Name, Headline, Email, Mobile Number, Connections, Followers
-- Work Experience: Job Title, Company, Industry, Website, Staff Count, Durations, Descriptions
-- Additional Fields: Education, Skills, Languages, Certifications, etc.
+---
 
-## Support
-For issues, questions, or feature requests:
-- Email: friends@theboomerang.co
-- Apify Actor: LinkedIn Profile Scraper
+## 📦 Estimated Delivery Time
 
-Made with ❤️ for the LinkedIn data enrichment community
+| Volume               | Delivery Time   |
+| -------------------- | --------------- |
+| 1k – 50k profiles    | within 3 hours  |
+| 50k – 100k profiles  | 3 – 6 hours     |
+| 100k – 500k profiles | within 12 hours |
+
+---
+
+## 🗂️ How to Use
+
+1. Create a free Apify account
+2. Provide LinkedIn profile URLs as input
+3. Run the actor
+4. Download structured JSON, CSV, or Excel output
