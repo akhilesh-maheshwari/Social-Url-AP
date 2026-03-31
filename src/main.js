@@ -137,7 +137,6 @@ try {
   let round            = 0;
   let allOutputLinks   = [];
 
-  // Helper: call Workflow 2 to get next pending batches
   const getNextBatchJobs = async () => {
     try {
       const wf2Res = await fetch(
@@ -174,7 +173,6 @@ try {
     }
   };
 
-  // Get first round of batchJobs
   let batchJobs = await getNextBatchJobs();
 
   if (!batchJobs || batchJobs.length === 0) {
@@ -190,22 +188,25 @@ try {
       console.log(`         Remaining : ${total_batches - completedBatches}`);
       console.log(`════════════════════════════════════`);
 
-      // ── Call Workflow 3 for ALL batches simultaneously ──
       console.log(`\n  Sending ${batchJobs.length} batches to n8n for status checking...`);
 
+      // ── CHANGED: polling loop instead of single long-wait fetch ──
       const batchStatusResults = await Promise.all(
         batchJobs.map(async (job) => {
           const { request_id, driveInputLink, batch_number, nocodb_id } = job;
-          console.log(`  ⏳ Batch ${batch_number} — Waiting for n8n to complete (request_id: ${request_id})...`);
-          let statusData = null;
-          while (!statusData) {
+          console.log(`  ⏳ Batch ${batch_number} — Polling status (request_id: ${request_id})...`);
+
+          const maxAttempts  = 15;     // 10 × 4min = 40 minutes max
+          const pollInterval = 180000; // 4 minutes between polls
+
+          for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
               const statusRes = await fetch(
                 'https://frontend.boomerangserver.co.in/webhook/batch-status-socialurl',
                 {
                   method : 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  signal : AbortSignal.timeout(60 * 60 * 1000),
+                  signal : AbortSignal.timeout(60000), // 60s per individual request
                   body   : JSON.stringify({
                     request_id,
                     batch_number,
@@ -217,7 +218,7 @@ try {
                     runId,
                     time,
                     serviceTagName,
-                    rowCount  : job.batch_size || rowCount,
+                    rowCount   : job.batch_size || rowCount,
                     creditsCost
                   })
                 }
@@ -225,38 +226,45 @@ try {
               const statusText = await statusRes.text();
 
               if (statusText.includes('<html>') || statusText.includes('504')) {
-                console.log(`  ❌ Batch ${batch_number} — 504 Gateway Timeout, please try again.`);
-                statusData = { status: 'GatewayTimeout' };
-                break;
+                console.log(`  ⚠️ Batch ${batch_number} — 504, retrying (${attempt}/${maxAttempts})...`);
+                await new Promise(r => setTimeout(r, pollInterval));
+                continue;
               }
 
-              console.log(`  ✅ Batch ${batch_number} n8n response:`, statusText);
-              statusData = JSON.parse(statusText);
+              const statusData = JSON.parse(statusText);
+              console.log(`  ✅ Batch ${batch_number} status:`, statusData.status);
+
+              if (statusData.status === 'Completed' || statusData.status === 'Failed') {
+                return { ...statusData, job };
+              }
+
+              console.log(`  🔄 Batch ${batch_number} still processing, attempt ${attempt}/${maxAttempts}. Waiting 3 min...`);
+              await new Promise(r => setTimeout(r, pollInterval));
 
             } catch (err) {
-              console.log(`  ❌ No response, please try again.`);
-              statusData = { status: 'Failed' };
+              console.log(`  ⚠️ Batch ${batch_number} poll error (attempt ${attempt}): ${err.message}`);
+              await new Promise(r => setTimeout(r, pollInterval));
             }
           }
-          return { ...statusData, job };
+
+          console.log(`  ❌ Batch ${batch_number} timed out after ${maxAttempts} attempts.`);
+          return { status: 'Failed', job };
         })
       );
+      // ── END CHANGED SECTION ──
 
-      // Stop if 504 timeout
       const hasTimeout = batchStatusResults.some(r => r.status === 'GatewayTimeout');
       if (hasTimeout) {
         console.log('\n❌ 504 Gateway Timeout — stopping. Please try again.');
         break;
       }
 
-      // ── Call Workflow 4 for each completed batch ──
       const batchResults = [];
 
       for (const result of batchStatusResults) {
         const { job } = result;
         const { request_id, driveInputLink, batch_number, nocodb_id } = job;
 
-        // Skip output if not completed
         if (result.status !== 'Completed') {
           console.log(`  ⚠️ Batch ${batch_number} did not complete. Skipping output.`);
           batchResults.push({
@@ -328,7 +336,6 @@ try {
         allOutputLinks.push(outputLink);
       }
 
-      // ── Log round results ──
       console.log(`\n✅ Round ${round} Results:`);
       for (const result of batchResults) {
         console.log(`\n   📦 Batch ${result.batch_number}`);
@@ -341,19 +348,16 @@ try {
 
       await Actor.pushData({ round, request_unique_id, completedBatches, total_batches, batchResults });
 
-      // ── Break if all done ──
       if (completedBatches >= total_batches) {
         const anyFailed = batchResults.some(r => r.status !== 'Completed' || !r.output_url);
         if (anyFailed) {
           console.log('\n⚠️ Some batches did not complete successfully.');
         } else {
-          // Call Workflow 2 once more to trigger false branch → updates apify_master → Completed
           await getNextBatchJobs();
         }
         break;
       }
 
-      // ── Get next round ──
       console.log(`\n⏳ ${total_batches - completedBatches} batch(es) remaining. Getting next round...`);
       batchJobs = await getNextBatchJobs();
 
