@@ -28,7 +28,7 @@ try {
   // ──────────────────────────────
   const validUrls = linkedinUrls
     .map(u => (typeof u === 'string' ? u.trim() : ''))
-    .filter(u => u.startsWith('https://www.linkedin.com/in/'));
+    .filter(u => u.startsWith('https://www.linkedin.com/in/') || u.startsWith('http://www.linkedin.com/in/'));
 
   console.log('Valid URLs:', validUrls.length);
   if (!validUrls.length) throw new Error('No valid LinkedIn profile URLs found!');
