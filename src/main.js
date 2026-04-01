@@ -68,43 +68,7 @@ try {
   console.log('Credits cost : $', creditsCost);
 
   // ──────────────────────────────
-  // 5. FETCH DRIVE CSV + PUSH ROWS
-  // ──────────────────────────────
-  const fetchAndPushDriveData = async (outputLink, batch_number) => {
-    try {
-      const fileIdMatch = outputLink.match(/\/d\/([a-zA-Z0-9-_]+)/);
-      if (!fileIdMatch) {
-        console.log(`  ⚠️ Batch ${batch_number} — Could not extract file ID from Drive link.`);
-        return;
-      }
-      const fileId  = fileIdMatch[1];
-      const csvUrl  = `https://drive.google.com/uc?export=download&id=${fileId}`;
-
-      console.log(`  📥 Batch ${batch_number} — Fetching CSV from Drive...`);
-      const csvRes  = await fetch(csvUrl);
-      const csvText = await csvRes.text();
-
-      const lines   = csvText.trim().split('\n');
-      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-      const rows    = lines.slice(1);
-
-      console.log(`  📊 Batch ${batch_number} — ${rows.length} rows found. Pushing to dataset...`);
-
-      for (const line of rows) {
-        const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
-        const rowObj = {};
-        headers.forEach((h, i) => { rowObj[h] = values[i] || ''; });
-        await Actor.pushData(rowObj);
-      }
-
-      console.log(`  💾 Batch ${batch_number} — ${rows.length} rows saved to dataset.`);
-    } catch (err) {
-      console.log(`  ❌ Batch ${batch_number} — Failed to fetch Drive data: ${err.message}`);
-    }
-  };
-
-  // ──────────────────────────────
-  // 6. STEP 1 — TRIGGER WORKFLOW 1
+  // 5. STEP 1 — TRIGGER WORKFLOW 1
   // ──────────────────────────────
   console.log('\n════════════════════════════════════');
   console.log('Step 1 : Setting up master & batches');
@@ -167,7 +131,7 @@ try {
   console.log('   Total Batches :', total_batches);
 
   // ──────────────────────────────
-  // 7. STEP 2 — PROCESS BATCHES
+  // 6. STEP 2 — PROCESS BATCHES
   // ──────────────────────────────
   let completedBatches = 0;
   let round            = 0;
@@ -302,15 +266,25 @@ try {
 
         if (result.status !== 'Completed') {
           console.log(`  ⚠️ Batch ${batch_number} did not complete. Skipping output.`);
-          batchResults.push({
+          const failedResult = {
             batch_number,
             request_id,
             status             : result.status || 'Failed',
             profiles_found     : 0,
             profiles_not_found : 0,
             output_url         : ''
-          });
+          };
+          batchResults.push(failedResult);
           allOutputLinks.push('');
+          await Actor.pushData({
+            run_id       : runId,
+            service_name : serviceName,
+            service_tag  : serviceTagName,
+            request_id,
+            status       : failedResult.status,
+            'Output Link': 'Failed'
+          });
+          console.log(`  💾 Batch ${batch_number} (failed) saved to dataset.`);
           continue;
         }
 
@@ -370,12 +344,15 @@ try {
         });
         allOutputLinks.push(outputLink);
 
-        // fetch CSV from Drive and push each row to dataset
-        if (outputLink) {
-          await fetchAndPushDriveData(outputLink, batch_number);
-        } else {
-          console.log(`  ⚠️ Batch ${batch_number} — No output link, skipping Drive fetch.`);
-        }
+        await Actor.pushData({
+          run_id       : runId,
+          service_name : serviceName,
+          service_tag  : serviceTagName,
+          request_id,
+          status       : result.status,
+          'Output Link': outputLink || 'Failed'
+        });
+        console.log(`  💾 Batch ${batch_number} saved to dataset.`);
       }
 
       console.log(`\n✅ Round ${round} Results:`);
@@ -410,7 +387,7 @@ try {
   }
 
   // ──────────────────────────────
-  // 8. FINAL SUMMARY
+  // 7. FINAL SUMMARY
   // ──────────────────────────────
   const completedCount = allBatchResults.filter(b => b.status === 'Completed').length;
   const errorCount     = allBatchResults.filter(b => b.status !== 'Completed').length;
