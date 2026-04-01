@@ -385,7 +385,6 @@ try {
       run_id        : runId,
       service_name  : serviceName,
       service_tag   : serviceTagName,
-      batch_number  : b.batch_number,
       request_id    : b.request_id,
       status        : b.status,
       'Output Link' : b.output_url || 'Failed'
