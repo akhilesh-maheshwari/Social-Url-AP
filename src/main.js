@@ -136,7 +136,7 @@ try {
   let completedBatches = 0;
   let round            = 0;
   let allOutputLinks   = [];
-  let allBatchResults  = []; // CHANGED: accumulate all batch results
+  let allBatchResults  = [];
 
   const getNextBatchJobs = async () => {
     try {
@@ -266,15 +266,25 @@ try {
 
         if (result.status !== 'Completed') {
           console.log(`  ⚠️ Batch ${batch_number} did not complete. Skipping output.`);
-          batchResults.push({
+          const failedResult = {
             batch_number,
             request_id,
             status             : result.status || 'Failed',
             profiles_found     : 0,
             profiles_not_found : 0,
             output_url         : ''
-          });
+          };
+          batchResults.push(failedResult);
           allOutputLinks.push('');
+          await Actor.pushData({
+            run_id       : runId,
+            service_name : serviceName,
+            service_tag  : serviceTagName,
+            request_id,
+            status       : failedResult.status,
+            'Output Link': 'Failed'
+          });
+          console.log(`  💾 Batch ${batch_number} (failed) saved to dataset.`);
           continue;
         }
 
@@ -332,20 +342,29 @@ try {
           profiles_not_found : result.profiles_not_found || 0,
           output_url         : outputLink
         });
-
         allOutputLinks.push(outputLink);
+
+        await Actor.pushData({
+          run_id       : runId,
+          service_name : serviceName,
+          service_tag  : serviceTagName,
+          request_id,
+          status       : result.status,
+          'Output Link': outputLink || 'Failed'
+        });
+        console.log(`  💾 Batch ${batch_number} saved to dataset.`);
       }
 
       console.log(`\n✅ Round ${round} Results:`);
       for (const result of batchResults) {
         console.log(`\n   📦 Batch ${result.batch_number}`);
-        console.log(`      Request ID       : ${result.request_id}`);
-        console.log(`      Status           : ${result.status}`);
-        console.log(`      Output Link      : ${result.output_url}`);
+        console.log(`      Request ID  : ${result.request_id}`);
+        console.log(`      Status      : ${result.status}`);
+        console.log(`      Output Link : ${result.output_url}`);
       }
 
       completedBatches += batchResults.length;
-      allBatchResults = allBatchResults.concat(batchResults); // CHANGED: accumulate
+      allBatchResults = allBatchResults.concat(batchResults);
 
       if (completedBatches >= total_batches) {
         const anyFailed = batchResults.some(r => r.status !== 'Completed' || !r.output_url);
@@ -370,26 +389,19 @@ try {
   // ──────────────────────────────
   // 7. FINAL SUMMARY
   // ──────────────────────────────
+  const completedCount = allBatchResults.filter(b => b.status === 'Completed').length;
+  const errorCount     = allBatchResults.filter(b => b.status !== 'Completed').length;
+
   console.log('\n════════════════════════════════════');
   console.log('🎉 ALL BATCHES COMPLETED!');
   console.log('════════════════════════════════════');
-  console.log('Run ID        :', runId);
-  console.log('Total Batches :', total_batches);
+  console.log('Run ID          :', runId);
+  console.log('Total Processed :', allBatchResults.length);
+  console.log('Completed       :', completedCount);
+  console.log('Errors          :', errorCount);
   console.log('\nOutput Links:');
   allOutputLinks.forEach((link, i) => console.log(`  Batch ${i + 1} : ${link || 'Failed'}`));
   console.log('════════════════════════════════════');
-
-  // CHANGED: one row per batch, Output Link as direct URL
-  for (const b of allBatchResults) {
-    await Actor.pushData({
-      run_id        : runId,
-      service_name  : serviceName,
-      service_tag   : serviceTagName,
-      request_id    : b.request_id,
-      status        : b.status,
-      'Output Link' : b.output_url || 'Failed'
-    });
-  }
 
 } catch (err) {
   console.log('❌ Error:', err.message);
