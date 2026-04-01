@@ -136,6 +136,7 @@ try {
   let completedBatches = 0;
   let round            = 0;
   let allOutputLinks   = [];
+  let allBatchResults  = []; // CHANGED: accumulate all batch results
 
   const getNextBatchJobs = async () => {
     try {
@@ -190,14 +191,13 @@ try {
 
       console.log(`\n  Sending ${batchJobs.length} batches to n8n for status checking...`);
 
-      // ── CHANGED: polling loop instead of single long-wait fetch ──
       const batchStatusResults = await Promise.all(
         batchJobs.map(async (job) => {
           const { request_id, driveInputLink, batch_number, nocodb_id } = job;
           console.log(`  ⏳ Batch ${batch_number} — Polling status (request_id: ${request_id})...`);
 
-          const maxAttempts  = 15;     // 10 × 4min = 40 minutes max
-          const pollInterval = 180000; // 4 minutes between polls
+          const maxAttempts  = 15;
+          const pollInterval = 180000;
 
           for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
@@ -206,7 +206,7 @@ try {
                 {
                   method : 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  signal : AbortSignal.timeout(60000), // 60s per individual request
+                  signal : AbortSignal.timeout(60000),
                   body   : JSON.stringify({
                     request_id,
                     batch_number,
@@ -251,7 +251,6 @@ try {
           return { status: 'Failed', job };
         })
       );
-      // ── END CHANGED SECTION ──
 
       const hasTimeout = batchStatusResults.some(r => r.status === 'GatewayTimeout');
       if (hasTimeout) {
@@ -310,6 +309,7 @@ try {
             }
           );
           const outputText = await outputRes.text();
+          console.log(`  Batch ${batch_number} output raw response:`, outputText);
           if (outputRes.ok) {
             try {
               const outputData = JSON.parse(outputText);
@@ -345,8 +345,7 @@ try {
       }
 
       completedBatches += batchResults.length;
-
-      await Actor.pushData({ round, request_unique_id, completedBatches, total_batches, batchResults });
+      allBatchResults = allBatchResults.concat(batchResults); // CHANGED: accumulate
 
       if (completedBatches >= total_batches) {
         const anyFailed = batchResults.some(r => r.status !== 'Completed' || !r.output_url);
@@ -371,18 +370,26 @@ try {
   // ──────────────────────────────
   // 7. FINAL SUMMARY
   // ──────────────────────────────
-  const successLinks = allOutputLinks.filter(l => l);
-  if (successLinks.length > 0 && successLinks.length === total_batches) {
-    console.log('\n════════════════════════════════════');
-    console.log('🎉 ALL BATCHES COMPLETED!');
-    console.log('════════════════════════════════════');
-    console.log('Request ID    :', request_unique_id);
-    console.log('Total Batches :', total_batches);
-    console.log('\nOutput Links:');
-    allOutputLinks.forEach((link, i) => console.log(`  Batch ${i + 1} : ${link || 'Failed'}`));
-    console.log('════════════════════════════════════');
+  console.log('\n════════════════════════════════════');
+  console.log('🎉 ALL BATCHES COMPLETED!');
+  console.log('════════════════════════════════════');
+  console.log('Run ID        :', runId);
+  console.log('Total Batches :', total_batches);
+  console.log('\nOutput Links:');
+  allOutputLinks.forEach((link, i) => console.log(`  Batch ${i + 1} : ${link || 'Failed'}`));
+  console.log('════════════════════════════════════');
 
-    await Actor.pushData({ status: 'completed', request_unique_id, total_batches, allOutputLinks });
+  // CHANGED: one row per batch, Output Link as direct URL
+  for (const b of allBatchResults) {
+    await Actor.pushData({
+      run_id        : runId,
+      service_name  : serviceName,
+      service_tag   : serviceTagName,
+      batch_number  : b.batch_number,
+      request_id    : b.request_id,
+      status        : b.status,
+      'Output Link' : b.output_url || 'Failed'
+    });
   }
 
 } catch (err) {
