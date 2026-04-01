@@ -13,7 +13,7 @@ try {
   const serviceName    = 'Linkedin Profile Scraper';
   const serviceOption1 = 'linkedin';
   const requestSource  = 'Linkedin_Profile_Scraper_AP';
-  const boomerangInputUrl = 'https://s1.boomerangserver.co.in/webhook/private-profiles-scraper';
+  const boomerangInputUrl = 'https://s1.boomerangserver.co.in/webhook/private-profile-scraper';
   const boomerangStatUrl  = 'https://s1.boomerangserver.co.in/webhook/private-profile-scraper-stats';
 
   console.log('Tag Name :', serviceTagName);
