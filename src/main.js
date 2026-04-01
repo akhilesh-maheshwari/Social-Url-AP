@@ -174,215 +174,243 @@ try {
     }
   };
 
+  // ✅ CHANGE 1: retry loop with 2 min wait instead of bail-out on empty batchJobs
   let batchJobs = await getNextBatchJobs();
 
-  if (!batchJobs || batchJobs.length === 0) {
-    console.log('❌ No response, please try again.');
-  } else {
+  while (!batchJobs || batchJobs.length === 0) {
+    console.log('⏳ No pending batches yet. Waiting 2 mins before retry...');
+    await new Promise(r => setTimeout(r, 2 * 60 * 1000));
+    batchJobs = await getNextBatchJobs();
+  }
 
-    while (true) {
+  // ✅ CHANGE 2: while(batchJobs) loop + getNextBatchJobs() at end, no completedBatches counter
+  while (batchJobs && batchJobs.length > 0) {
 
-      round++;
-      console.log(`\n════════════════════════════════════`);
-      console.log(`Step 2 : Round ${round} — ${batchJobs.length} batch(es)`);
-      console.log(`         Completed : ${completedBatches}/${total_batches}`);
-      console.log(`         Remaining : ${total_batches - completedBatches}`);
-      console.log(`════════════════════════════════════`);
+    round++;
+    console.log(`\n════════════════════════════════════`);
+    console.log(`Step 2 : Round ${round} — ${batchJobs.length} batch(es)`);
+    console.log(`         Processed so far : ${allBatchResults.length}/${total_batches}`);
+    console.log(`════════════════════════════════════`);
 
-      console.log(`\n  Sending ${batchJobs.length} batches to n8n for status checking...`);
+    console.log(`\n  Sending ${batchJobs.length} batches to n8n for status checking...`);
 
-      const batchStatusResults = await Promise.all(
-        batchJobs.map(async (job) => {
-          const { request_id, driveInputLink, batch_number, nocodb_id } = job;
-          console.log(`  ⏳ Batch ${batch_number} — Polling status (request_id: ${request_id})...`);
-
-          const maxAttempts  = 15;
-          const pollInterval = 180000;
-
-          for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            try {
-              const statusRes = await fetch(
-                'https://frontend.boomerangserver.co.in/webhook/batch-status-socialurl',
-                {
-                  method : 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  signal : AbortSignal.timeout(60000),
-                  body   : JSON.stringify({
-                    request_id,
-                    batch_number,
-                    driveInputLink,
-                    request_unique_id,
-                    batchFolderId,
-                    boomerangStatUrl,
-                    userId,
-                    runId,
-                    time,
-                    serviceTagName,
-                    rowCount   : job.batch_size || rowCount,
-                    creditsCost
-                  })
-                }
-              );
-              const statusText = await statusRes.text();
-
-              if (statusText.includes('<html>') || statusText.includes('504')) {
-                console.log(`  ⚠️ Batch ${batch_number} — 504, retrying (${attempt}/${maxAttempts})...`);
-                await new Promise(r => setTimeout(r, pollInterval));
-                continue;
-              }
-
-              const statusData = JSON.parse(statusText);
-              console.log(`  ✅ Batch ${batch_number} status:`, statusData.status);
-
-              if (statusData.status === 'Completed' || statusData.status === 'Failed') {
-                return { ...statusData, job };
-              }
-
-              console.log(`  🔄 Batch ${batch_number} still processing, attempt ${attempt}/${maxAttempts}. Waiting 3 min...`);
-              await new Promise(r => setTimeout(r, pollInterval));
-
-            } catch (err) {
-              console.log(`  ⚠️ Batch ${batch_number} poll error (attempt ${attempt}): ${err.message}`);
-              await new Promise(r => setTimeout(r, pollInterval));
-            }
-          }
-
-          console.log(`  ❌ Batch ${batch_number} timed out after ${maxAttempts} attempts.`);
-          return { status: 'Failed', job };
-        })
-      );
-
-      const hasTimeout = batchStatusResults.some(r => r.status === 'GatewayTimeout');
-      if (hasTimeout) {
-        console.log('\n❌ 504 Gateway Timeout — stopping. Please try again.');
-        break;
-      }
-
-      const batchResults = [];
-
-      for (const result of batchStatusResults) {
-        const { job } = result;
+    const batchStatusResults = await Promise.all(
+      batchJobs.map(async (job) => {
         const { request_id, driveInputLink, batch_number, nocodb_id } = job;
+        console.log(`  ⏳ Batch ${batch_number} — Polling status (request_id: ${request_id})...`);
 
-        if (result.status !== 'Completed') {
-          console.log(`  ⚠️ Batch ${batch_number} did not complete. Skipping output.`);
-          const failedResult = {
-            batch_number,
-            request_id,
-            status             : result.status || 'Failed',
-            profiles_found     : 0,
-            profiles_not_found : 0,
-            output_url         : ''
-          };
-          batchResults.push(failedResult);
-          allOutputLinks.push('');
-          await Actor.pushData({
-            run_id       : runId,
-            service_name : serviceName,
-            service_tag  : serviceTagName,
-            request_id,
-            status       : failedResult.status,
-            'Output Link': 'Failed'
-          });
-          console.log(`  💾 Batch ${batch_number} (failed) saved to dataset.`);
-          continue;
+        // ✅ CHANGE 4: maxAttempts 15 → 10, AbortSignal 60s → 120s
+        const maxAttempts  = 10;
+        const pollInterval = 180000;
+
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          try {
+            const statusRes = await fetch(
+              'https://frontend.boomerangserver.co.in/webhook/batch-status-socialurl',
+              {
+                method : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                signal : AbortSignal.timeout(120000),
+                body   : JSON.stringify({
+                  request_id,
+                  batch_number,
+                  driveInputLink,
+                  request_unique_id,
+                  batchFolderId,
+                  boomerangStatUrl,
+                  userId,
+                  runId,
+                  time,
+                  serviceTagName,
+                  rowCount   : job.batch_size || rowCount,
+                  creditsCost
+                })
+              }
+            );
+            const statusText = await statusRes.text();
+
+            if (statusText.includes('<html>') || statusText.includes('504')) {
+              console.log(`  ⚠️ Batch ${batch_number} — 504, retrying (${attempt}/${maxAttempts})...`);
+              await new Promise(r => setTimeout(r, pollInterval));
+              continue;
+            }
+
+            const statusData = JSON.parse(statusText);
+            console.log(`  ✅ Batch ${batch_number} status:`, statusData.status);
+
+            if (statusData.status === 'Completed' || statusData.status === 'Failed') {
+              return { ...statusData, job };
+            }
+
+            console.log(`  🔄 Batch ${batch_number} still processing, attempt ${attempt}/${maxAttempts}. Waiting 3 min...`);
+            await new Promise(r => setTimeout(r, pollInterval));
+
+          } catch (err) {
+            console.log(`  ⚠️ Batch ${batch_number} poll error (attempt ${attempt}): ${err.message}`);
+            await new Promise(r => setTimeout(r, pollInterval));
+          }
         }
 
-        const boomerangOutputUrl = `https://s1.boomerangserver.co.in/webhook/private-profile-scraper-output?request_id=${request_id}`;
+        console.log(`  ❌ Batch ${batch_number} timed out after ${maxAttempts} attempts.`);
 
-        let outputLink = '';
+        // ✅ CHANGE 3: notify webhook on timeout
         try {
-          const outputRes = await fetch(
+          await fetch(
             'https://frontend.boomerangserver.co.in/webhook/waterfall-output-socialurl',
             {
               method : 'POST',
               headers: { 'Content-Type': 'application/json' },
-              signal : AbortSignal.timeout(60000),
+              signal : AbortSignal.timeout(30000),
               body   : JSON.stringify({
                 userId,
                 runId,
                 time,
                 serviceTagName,
-                rowCount         : job.batch_size || rowCount,
+                rowCount          : job.batch_size || rowCount,
                 creditsCost,
                 request_id,
-                requestStatus    : result.status,
+                requestStatus     : 'Error',
                 driveInputLink,
-                boomerangOutputUrl,
+                boomerangOutputUrl: `https://s1.boomerangserver.co.in/webhook/private-profile-scraper-output?request_id=${request_id}`,
                 batch_number,
                 request_unique_id,
                 batchFolderId,
-                service_option_1 : serviceOption1,
-                service_name     : serviceName,
-                request_source   : requestSource
+                service_option_1  : serviceOption1,
+                service_name      : serviceName,
+                request_source    : requestSource,
+                reason            : `Timed out after ${maxAttempts} attempts`
               })
             }
           );
-          const outputText = await outputRes.text();
-          console.log(`  Batch ${batch_number} output raw response:`, outputText);
-          if (outputRes.ok) {
-            try {
-              const outputData = JSON.parse(outputText);
-              outputLink = outputData['Output Link'] || outputData.outputLink || outputData.driveOutputLink || outputData.webViewLink || '';
-            } catch (e) {
-              console.log(`  Batch ${batch_number} output parse failed.`);
-            }
-          } else {
-            console.log(`  ❌ No response, please try again.`);
-          }
-        } catch (fetchErr) {
-          console.log(`  ❌ No response, please try again.`);
+          console.log(`  📤 Batch ${batch_number} — Error status sent to webhook.`);
+        } catch (err) {
+          console.log(`  ⚠️ Batch ${batch_number} — Failed to notify webhook: ${err.message}`);
         }
 
-        batchResults.push({
+        // ✅ CHANGE 5: 'Failed' → 'Error'
+        return { status: 'Error', job };
+      })
+    );
+
+    const hasTimeout = batchStatusResults.some(r => r.status === 'GatewayTimeout');
+    if (hasTimeout) {
+      console.log('\n❌ 504 Gateway Timeout — stopping. Please try again.');
+      break;
+    }
+
+    const batchResults = [];
+
+    for (const result of batchStatusResults) {
+      const { job } = result;
+      const { request_id, driveInputLink, batch_number, nocodb_id } = job;
+
+      if (result.status !== 'Completed') {
+        console.log(`  ⚠️ Batch ${batch_number} did not complete. Skipping output.`);
+        const failedResult = {
           batch_number,
           request_id,
-          status             : result.status,
-          profiles_found     : result.profiles_found     || 0,
-          profiles_not_found : result.profiles_not_found || 0,
-          output_url         : outputLink
-        });
-        allOutputLinks.push(outputLink);
-
+          status             : result.status || 'Error',
+          profiles_found     : 0,
+          profiles_not_found : 0,
+          output_url         : ''
+        };
+        batchResults.push(failedResult);
+        allOutputLinks.push('');
         await Actor.pushData({
           run_id       : runId,
           service_name : serviceName,
           service_tag  : serviceTagName,
           request_id,
-          status       : result.status,
-          'Output Link': outputLink || 'Failed'
+          status       : failedResult.status,
+          'Output Link': 'Failed'
         });
-        console.log(`  💾 Batch ${batch_number} saved to dataset.`);
+        console.log(`  💾 Batch ${batch_number} (failed) saved to dataset.`);
+        continue;
       }
 
-      console.log(`\n✅ Round ${round} Results:`);
-      for (const result of batchResults) {
-        console.log(`\n   📦 Batch ${result.batch_number}`);
-        console.log(`      Request ID  : ${result.request_id}`);
-        console.log(`      Status      : ${result.status}`);
-        console.log(`      Output Link : ${result.output_url}`);
-      }
+      const boomerangOutputUrl = `https://s1.boomerangserver.co.in/webhook/private-profile-scraper-output?request_id=${request_id}`;
 
-      completedBatches += batchResults.length;
-      allBatchResults = allBatchResults.concat(batchResults);
-
-      if (completedBatches >= total_batches) {
-        const anyFailed = batchResults.some(r => r.status !== 'Completed' || !r.output_url);
-        if (anyFailed) {
-          console.log('\n⚠️ Some batches did not complete successfully.');
+      let outputLink = '';
+      try {
+        const outputRes = await fetch(
+          'https://frontend.boomerangserver.co.in/webhook/waterfall-output-socialurl',
+          {
+            method : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal : AbortSignal.timeout(60000),
+            body   : JSON.stringify({
+              userId,
+              runId,
+              time,
+              serviceTagName,
+              rowCount         : job.batch_size || rowCount,
+              creditsCost,
+              request_id,
+              requestStatus    : result.status,
+              driveInputLink,
+              boomerangOutputUrl,
+              batch_number,
+              request_unique_id,
+              batchFolderId,
+              service_option_1 : serviceOption1,
+              service_name     : serviceName,
+              request_source   : requestSource
+            })
+          }
+        );
+        const outputText = await outputRes.text();
+        console.log(`  Batch ${batch_number} output raw response:`, outputText);
+        if (outputRes.ok) {
+          try {
+            const outputData = JSON.parse(outputText);
+            outputLink = outputData['Output Link'] || outputData.outputLink || outputData.driveOutputLink || outputData.webViewLink || '';
+          } catch (e) {
+            console.log(`  Batch ${batch_number} output parse failed.`);
+          }
         } else {
-          await getNextBatchJobs();
+          console.log(`  ❌ No response, please try again.`);
         }
-        break;
+      } catch (fetchErr) {
+        console.log(`  ❌ No response, please try again.`);
       }
 
-      console.log(`\n⏳ ${total_batches - completedBatches} batch(es) remaining. Getting next round...`);
-      batchJobs = await getNextBatchJobs();
+      batchResults.push({
+        batch_number,
+        request_id,
+        status             : result.status,
+        profiles_found     : result.profiles_found     || 0,
+        profiles_not_found : result.profiles_not_found || 0,
+        output_url         : outputLink
+      });
+      allOutputLinks.push(outputLink);
 
-      if (!batchJobs || batchJobs.length === 0) {
-        console.log('✅ No more pending batches.');
-        break;
-      }
+      await Actor.pushData({
+        run_id       : runId,
+        service_name : serviceName,
+        service_tag  : serviceTagName,
+        request_id,
+        status       : result.status,
+        'Output Link': outputLink || 'Failed'
+      });
+      console.log(`  💾 Batch ${batch_number} saved to dataset.`);
+    }
+
+    console.log(`\n✅ Round ${round} Results:`);
+    for (const result of batchResults) {
+      console.log(`\n   📦 Batch ${result.batch_number}`);
+      console.log(`      Request ID  : ${result.request_id}`);
+      console.log(`      Status      : ${result.status}`);
+      console.log(`      Output Link : ${result.output_url}`);
+    }
+
+    allBatchResults = allBatchResults.concat(batchResults);
+
+    console.log(`\n⏳ Checking for next pending batch...`);
+    batchJobs = await getNextBatchJobs();
+
+    if (!batchJobs || batchJobs.length === 0) {
+      console.log('✅ No more pending batches — all done!');
+      break;
     }
   }
 
