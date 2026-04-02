@@ -506,16 +506,3 @@ try {
 }
 
 await Actor.exit();
-```
-
----
-
-### Only 2 Things Changed
-```
-1. Added Actor.charge line:
-   await Actor.charge({ eventName: 'linkedin', count: rowCount });
-
-2. Added retry loop for no slots:
-   while (!batchJobs || batchJobs.length === 0) {
-     wait 2 mins → retry
-   }
