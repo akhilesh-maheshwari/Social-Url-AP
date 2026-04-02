@@ -84,8 +84,12 @@ try {
       const csvRes  = await fetch(csvUrl);
       const csvText = await csvRes.text();
 
-      // ✅ Full CSV parser — handles commas AND newlines inside quoted fields
-      const parseCSV = (text) => {
+      // ✅ Auto-detect separator: tab or comma
+      const separator = csvText.indexOf('\t') !== -1 ? '\t' : ',';
+      console.log(`  🔍 Batch ${batch_number} — Detected separator: ${separator === '\t' ? 'TAB' : 'COMMA'}`);
+
+      // ✅ Full parser — handles newlines AND commas/tabs inside quoted fields
+      const parseCSV = (text, sep) => {
         const rows    = [];
         let current   = '';
         let inQuotes  = false;
@@ -102,7 +106,7 @@ try {
             } else {
               inQuotes = !inQuotes;
             }
-          } else if (char === ',' && !inQuotes) {
+          } else if (char === sep && !inQuotes) {
             fields.push(current.trim());
             current = '';
           } else if ((char === '\n' || (char === '\r' && nextChar === '\n')) && !inQuotes) {
@@ -125,7 +129,7 @@ try {
         return rows;
       };
 
-      const rows    = parseCSV(csvText);
+      const rows    = parseCSV(csvText, separator);
       const headers = rows[0];
       const data    = rows.slice(1);
 
@@ -461,7 +465,7 @@ try {
       });
       allOutputLinks.push(outputLink);
 
-      // ✅ Push full CSV rows to dataset with full CSV parser
+      // ✅ Push full rows to dataset with auto-detect TSV/CSV parser
       if (outputLink) {
         await fetchAndPushDriveData(outputLink, batch_number);
       } else {
