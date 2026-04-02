@@ -88,7 +88,7 @@ try {
       const separator = csvText.indexOf('\t') !== -1 ? '\t' : ',';
       console.log(`  🔍 Batch ${batch_number} — Detected separator: ${separator === '\t' ? 'TAB' : 'COMMA'}`);
 
-      // ✅ Full parser — handles newlines AND commas/tabs inside quoted fields
+      // ✅ Full parser — handles newlines AND separators inside quoted fields
       const parseCSV = (text, sep) => {
         const rows    = [];
         let current   = '';
@@ -120,7 +120,6 @@ try {
           }
         }
 
-        // push last field/row
         if (current || fields.length) {
           fields.push(current.trim());
           if (fields.some(f => f !== '')) rows.push(fields);
@@ -129,9 +128,28 @@ try {
         return rows;
       };
 
-      const rows    = parseCSV(csvText, separator);
-      const headers = rows[0];
-      const data    = rows.slice(1);
+      const rawRows    = parseCSV(csvText, separator);
+      const headers    = rawRows[0];
+      const headerCount = headers.length;
+
+      console.log(`  🔍 Batch ${batch_number} — Headers detected: ${headerCount}`);
+
+      // ✅ Merge rows that have fewer fields than headers
+      // This fixes unquoted newlines inside field values (e.g. linkedInUrl has bare \n)
+      const data = [];
+      let i = 1;
+      while (i < rawRows.length) {
+        let row = [...rawRows[i]];
+        while (row.length < headerCount && i + 1 < rawRows.length) {
+          i++;
+          const nextRow = rawRows[i];
+          // merge last field of current row with first field of next row
+          row[row.length - 1] = (row[row.length - 1] + '\n' + nextRow[0]).trim();
+          row = row.concat(nextRow.slice(1));
+        }
+        data.push(row);
+        i++;
+      }
 
       console.log(`  📊 Batch ${batch_number} — ${data.length} rows found. Pushing to dataset...`);
 
@@ -465,7 +483,7 @@ try {
       });
       allOutputLinks.push(outputLink);
 
-      // ✅ Push full rows to dataset with auto-detect TSV/CSV parser
+      // ✅ Push full rows to dataset with row-merge fix
       if (outputLink) {
         await fetchAndPushDriveData(outputLink, batch_number);
       } else {
