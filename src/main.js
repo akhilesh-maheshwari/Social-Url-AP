@@ -84,31 +84,57 @@ try {
       const csvRes  = await fetch(csvUrl);
       const csvText = await csvRes.text();
 
-      // ✅ File is TSV (tab-separated)
-      // ✅ linkedInUrl has a bare newline — continuation lines start with \t
-      // ✅ Merge those continuation lines back into the previous line first
-      const rawLines = csvText.split('\n');
-      const mergedLines = [];
+      // ✅ Full CSV parser — handles commas AND newlines inside quoted fields
+      const parseCSV = (text) => {
+        const rows    = [];
+        let current   = '';
+        let inQuotes  = false;
+        let fields    = [];
 
-      for (const line of rawLines) {
-        if (line.startsWith('\t') && mergedLines.length > 0) {
-          // continuation of previous row — append directly
-          mergedLines[mergedLines.length - 1] += line;
-        } else if (line.trim()) {
-          mergedLines.push(line);
+        for (let i = 0; i < text.length; i++) {
+          const char     = text[i];
+          const nextChar = text[i + 1];
+
+          if (char === '"') {
+            if (inQuotes && nextChar === '"') {
+              current += '"';
+              i++;
+            } else {
+              inQuotes = !inQuotes;
+            }
+          } else if (char === ',' && !inQuotes) {
+            fields.push(current.trim());
+            current = '';
+          } else if ((char === '\n' || (char === '\r' && nextChar === '\n')) && !inQuotes) {
+            if (char === '\r') i++;
+            fields.push(current.trim());
+            rows.push(fields);
+            fields  = [];
+            current = '';
+          } else {
+            current += char;
+          }
         }
-      }
 
-      const headers = mergedLines[0].split('\t').map(h => h.trim());
-      const data    = mergedLines.slice(1);
+        // push last field/row
+        if (current || fields.length) {
+          fields.push(current.trim());
+          if (fields.some(f => f !== '')) rows.push(fields);
+        }
 
-      console.log(`  🔍 Batch ${batch_number} — Headers: ${headers.length}, Rows: ${data.length}`);
+        return rows;
+      };
 
-      for (const line of data) {
-        const values = line.split('\t').map(v => v.trim());
-        if (!values.some(v => v !== '')) continue;
+      const rows    = parseCSV(csvText);
+      const headers = rows[0];
+      const data    = rows.slice(1);
+
+      console.log(`  📊 Batch ${batch_number} — ${data.length} rows found. Pushing to dataset...`);
+
+      for (const row of data) {
+        if (!row.some(f => f !== '')) continue;
         const rowObj = {};
-        headers.forEach((h, i) => { rowObj[h] = values[i] || ''; });
+        headers.forEach((h, i) => { rowObj[h] = row[i] || ''; });
         await Actor.pushData(rowObj);
       }
 
