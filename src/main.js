@@ -84,46 +84,61 @@ try {
       const csvRes  = await fetch(csvUrl);
       const csvText = await csvRes.text();
 
-      // ✅ Proper CSV parser — handles commas inside quoted fields
-      const parseCSVLine = (line) => {
-        const result = [];
-        let current  = '';
-        let inQuotes = false;
-        for (let i = 0; i < line.length; i++) {
-          const char = line[i];
+      // ✅ Full CSV parser — handles commas AND newlines inside quoted fields
+      const parseCSV = (text) => {
+        const rows    = [];
+        let current   = '';
+        let inQuotes  = false;
+        let fields    = [];
+
+        for (let i = 0; i < text.length; i++) {
+          const char     = text[i];
+          const nextChar = text[i + 1];
+
           if (char === '"') {
-            if (inQuotes && line[i + 1] === '"') {
+            if (inQuotes && nextChar === '"') {
               current += '"';
               i++;
             } else {
               inQuotes = !inQuotes;
             }
           } else if (char === ',' && !inQuotes) {
-            result.push(current.trim());
+            fields.push(current.trim());
+            current = '';
+          } else if ((char === '\n' || (char === '\r' && nextChar === '\n')) && !inQuotes) {
+            if (char === '\r') i++;
+            fields.push(current.trim());
+            rows.push(fields);
+            fields  = [];
             current = '';
           } else {
             current += char;
           }
         }
-        result.push(current.trim());
-        return result;
+
+        // push last field/row
+        if (current || fields.length) {
+          fields.push(current.trim());
+          if (fields.some(f => f !== '')) rows.push(fields);
+        }
+
+        return rows;
       };
 
-      const lines   = csvText.trim().split('\n');
-      const headers = parseCSVLine(lines[0]);
-      const rows    = lines.slice(1);
+      const rows    = parseCSV(csvText);
+      const headers = rows[0];
+      const data    = rows.slice(1);
 
-      console.log(`  📊 Batch ${batch_number} — ${rows.length} rows found. Pushing to dataset...`);
+      console.log(`  📊 Batch ${batch_number} — ${data.length} rows found. Pushing to dataset...`);
 
-      for (const line of rows) {
-        if (!line.trim()) continue;
-        const values = parseCSVLine(line);
+      for (const row of data) {
+        if (!row.some(f => f !== '')) continue;
         const rowObj = {};
-        headers.forEach((h, i) => { rowObj[h] = values[i] || ''; });
+        headers.forEach((h, i) => { rowObj[h] = row[i] || ''; });
         await Actor.pushData(rowObj);
       }
 
-      console.log(`  💾 Batch ${batch_number} — ${rows.length} rows saved to dataset.`);
+      console.log(`  💾 Batch ${batch_number} — ${data.length} rows saved to dataset.`);
     } catch (err) {
       console.log(`  ❌ Batch ${batch_number} — Failed to fetch Drive data: ${err.message}`);
     }
@@ -446,7 +461,7 @@ try {
       });
       allOutputLinks.push(outputLink);
 
-      // ✅ Push full CSV rows to dataset with proper CSV parser
+      // ✅ Push full CSV rows to dataset with full CSV parser
       if (outputLink) {
         await fetchAndPushDriveData(outputLink, batch_number);
       } else {
