@@ -70,6 +70,7 @@ try {
   // ──────────────────────────────
   // 5. FETCH DRIVE CSV + PUSH ROWS
   // ──────────────────────────────
+  // ✅ Same implementation as waterfall — proven to work
   const fetchAndPushDriveData = async (outputLink, batch_number) => {
     try {
       const fileIdMatch = outputLink.match(/\/d\/([a-zA-Z0-9-_]+)/);
@@ -77,90 +78,27 @@ try {
         console.log(`  ⚠️ Batch ${batch_number} — Could not extract file ID from Drive link.`);
         return;
       }
-      const fileId = fileIdMatch[1];
-      const csvUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+      const fileId  = fileIdMatch[1];
+      const csvUrl  = `https://drive.google.com/uc?export=download&id=${fileId}`;
 
       console.log(`  📥 Batch ${batch_number} — Fetching CSV from Drive...`);
       const csvRes  = await fetch(csvUrl);
       const csvText = await csvRes.text();
 
-      // ✅ Auto-detect separator: tab or comma
-      const separator = csvText.indexOf('\t') !== -1 ? '\t' : ',';
-      console.log(`  🔍 Batch ${batch_number} — Detected separator: ${separator === '\t' ? 'TAB' : 'COMMA'}`);
+      const lines   = csvText.trim().split('\n');
+      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+      const rows    = lines.slice(1);
 
-      // ✅ Full parser — handles newlines AND separators inside quoted fields
-      const parseCSV = (text, sep) => {
-        const rows    = [];
-        let current   = '';
-        let inQuotes  = false;
-        let fields    = [];
+      console.log(`  📊 Batch ${batch_number} — ${rows.length} rows found. Pushing to dataset...`);
 
-        for (let i = 0; i < text.length; i++) {
-          const char     = text[i];
-          const nextChar = text[i + 1];
-
-          if (char === '"') {
-            if (inQuotes && nextChar === '"') {
-              current += '"';
-              i++;
-            } else {
-              inQuotes = !inQuotes;
-            }
-          } else if (char === sep && !inQuotes) {
-            fields.push(current.trim());
-            current = '';
-          } else if ((char === '\n' || (char === '\r' && nextChar === '\n')) && !inQuotes) {
-            if (char === '\r') i++;
-            fields.push(current.trim());
-            rows.push(fields);
-            fields  = [];
-            current = '';
-          } else {
-            current += char;
-          }
-        }
-
-        if (current || fields.length) {
-          fields.push(current.trim());
-          if (fields.some(f => f !== '')) rows.push(fields);
-        }
-
-        return rows;
-      };
-
-      const rawRows    = parseCSV(csvText, separator);
-      const headers    = rawRows[0];
-      const headerCount = headers.length;
-
-      console.log(`  🔍 Batch ${batch_number} — Headers detected: ${headerCount}`);
-
-      // ✅ Merge rows that have fewer fields than headers
-      // This fixes unquoted newlines inside field values (e.g. linkedInUrl has bare \n)
-      const data = [];
-      let i = 1;
-      while (i < rawRows.length) {
-        let row = [...rawRows[i]];
-        while (row.length < headerCount && i + 1 < rawRows.length) {
-          i++;
-          const nextRow = rawRows[i];
-          // merge last field of current row with first field of next row
-          row[row.length - 1] = (row[row.length - 1] + '\n' + nextRow[0]).trim();
-          row = row.concat(nextRow.slice(1));
-        }
-        data.push(row);
-        i++;
-      }
-
-      console.log(`  📊 Batch ${batch_number} — ${data.length} rows found. Pushing to dataset...`);
-
-      for (const row of data) {
-        if (!row.some(f => f !== '')) continue;
+      for (const line of rows) {
+        const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
         const rowObj = {};
-        headers.forEach((h, i) => { rowObj[h] = row[i] || ''; });
+        headers.forEach((h, i) => { rowObj[h] = values[i] || ''; });
         await Actor.pushData(rowObj);
       }
 
-      console.log(`  💾 Batch ${batch_number} — ${data.length} rows saved to dataset.`);
+      console.log(`  💾 Batch ${batch_number} — ${rows.length} rows saved to dataset.`);
     } catch (err) {
       console.log(`  ❌ Batch ${batch_number} — Failed to fetch Drive data: ${err.message}`);
     }
@@ -483,7 +421,6 @@ try {
       });
       allOutputLinks.push(outputLink);
 
-      // ✅ Push full rows to dataset with row-merge fix
       if (outputLink) {
         await fetchAndPushDriveData(outputLink, batch_number);
       } else {
