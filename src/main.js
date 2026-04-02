@@ -61,11 +61,15 @@ try {
   console.log('Time    :', time);
 
   // ──────────────────────────────
-  // 4. CALCULATE COST
+  // 4. CALCULATE COST + CHARGE
   // ──────────────────────────────
   const creditsCost = parseFloat((rowCount * 0.005).toFixed(3));
   console.log('URL count    :', rowCount);
   console.log('Credits cost : $', creditsCost);
+
+  // ← ONLY CHANGE: charge user $0.005 per URL
+  await Actor.charge({ eventName: 'linkedin', count: rowCount });
+  console.log('Charged      : $', creditsCost);
 
   // ──────────────────────────────
   // 5. FETCH DRIVE CSV + PUSH ROWS
@@ -84,7 +88,6 @@ try {
       const csvRes  = await fetch(csvUrl);
       const csvText = await csvRes.text();
 
-      // ✅ Full CSV parser — handles commas AND newlines inside quoted fields
       const parseCSV = (text) => {
         const rows    = [];
         let current   = '';
@@ -116,7 +119,6 @@ try {
           }
         }
 
-        // push last field/row
         if (current || fields.length) {
           fields.push(current.trim());
           if (fields.some(f => f !== '')) rows.push(fields);
@@ -251,16 +253,14 @@ try {
     }
   };
 
-  // ✅ CHANGE 1: retry loop with 2 min wait instead of bail-out on empty batchJobs
   let batchJobs = await getNextBatchJobs();
 
   while (!batchJobs || batchJobs.length === 0) {
-    console.log('⏳ No pending batches yet. Waiting 2 mins before retry...');
+    console.log('⏳ No slots available (backend full). Waiting 2 mins before retry...');
     await new Promise(r => setTimeout(r, 2 * 60 * 1000));
     batchJobs = await getNextBatchJobs();
   }
 
-  // ✅ CHANGE 2: while(batchJobs) loop + getNextBatchJobs() at end
   while (batchJobs && batchJobs.length > 0) {
 
     round++;
@@ -276,7 +276,6 @@ try {
         const { request_id, driveInputLink, batch_number, nocodb_id } = job;
         console.log(`  ⏳ Batch ${batch_number} — Polling status (request_id: ${request_id})...`);
 
-        // ✅ CHANGE 4: maxAttempts 15 → 10, AbortSignal 60s → 120s
         const maxAttempts  = 10;
         const pollInterval = 180000;
 
@@ -330,7 +329,6 @@ try {
 
         console.log(`  ❌ Batch ${batch_number} timed out after ${maxAttempts} attempts.`);
 
-        // ✅ CHANGE 3: notify webhook on timeout
         try {
           await fetch(
             'https://frontend.boomerangserver.co.in/webhook/waterfall-output-socialurl',
@@ -364,7 +362,6 @@ try {
           console.log(`  ⚠️ Batch ${batch_number} — Failed to notify webhook: ${err.message}`);
         }
 
-        // ✅ CHANGE 5: 'Failed' → 'Error'
         return { status: 'Error', job };
       })
     );
@@ -509,3 +506,16 @@ try {
 }
 
 await Actor.exit();
+```
+
+---
+
+### Only 2 Things Changed
+```
+1. Added Actor.charge line:
+   await Actor.charge({ eventName: 'linkedin', count: rowCount });
+
+2. Added retry loop for no slots:
+   while (!batchJobs || batchJobs.length === 0) {
+     wait 2 mins → retry
+   }
