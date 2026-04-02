@@ -70,7 +70,6 @@ try {
   // ──────────────────────────────
   // 5. FETCH DRIVE CSV + PUSH ROWS
   // ──────────────────────────────
-  // ✅ Same implementation as waterfall — proven to work
   const fetchAndPushDriveData = async (outputLink, batch_number) => {
     try {
       const fileIdMatch = outputLink.match(/\/d\/([a-zA-Z0-9-_]+)/);
@@ -78,27 +77,42 @@ try {
         console.log(`  ⚠️ Batch ${batch_number} — Could not extract file ID from Drive link.`);
         return;
       }
-      const fileId  = fileIdMatch[1];
-      const csvUrl  = `https://drive.google.com/uc?export=download&id=${fileId}`;
+      const fileId = fileIdMatch[1];
+      const csvUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
 
       console.log(`  📥 Batch ${batch_number} — Fetching CSV from Drive...`);
       const csvRes  = await fetch(csvUrl);
       const csvText = await csvRes.text();
 
-      const lines   = csvText.trim().split('\n');
-      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-      const rows    = lines.slice(1);
+      // ✅ File is TSV (tab-separated)
+      // ✅ linkedInUrl has a bare newline — continuation lines start with \t
+      // ✅ Merge those continuation lines back into the previous line first
+      const rawLines = csvText.split('\n');
+      const mergedLines = [];
 
-      console.log(`  📊 Batch ${batch_number} — ${rows.length} rows found. Pushing to dataset...`);
+      for (const line of rawLines) {
+        if (line.startsWith('\t') && mergedLines.length > 0) {
+          // continuation of previous row — append directly
+          mergedLines[mergedLines.length - 1] += line;
+        } else if (line.trim()) {
+          mergedLines.push(line);
+        }
+      }
 
-      for (const line of rows) {
-        const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+      const headers = mergedLines[0].split('\t').map(h => h.trim());
+      const data    = mergedLines.slice(1);
+
+      console.log(`  🔍 Batch ${batch_number} — Headers: ${headers.length}, Rows: ${data.length}`);
+
+      for (const line of data) {
+        const values = line.split('\t').map(v => v.trim());
+        if (!values.some(v => v !== '')) continue;
         const rowObj = {};
         headers.forEach((h, i) => { rowObj[h] = values[i] || ''; });
         await Actor.pushData(rowObj);
       }
 
-      console.log(`  💾 Batch ${batch_number} — ${rows.length} rows saved to dataset.`);
+      console.log(`  💾 Batch ${batch_number} — ${data.length} rows saved to dataset.`);
     } catch (err) {
       console.log(`  ❌ Batch ${batch_number} — Failed to fetch Drive data: ${err.message}`);
     }
