@@ -84,14 +84,40 @@ try {
       const csvRes  = await fetch(csvUrl);
       const csvText = await csvRes.text();
 
+      // ✅ Proper CSV parser — handles commas inside quoted fields
+      const parseCSVLine = (line) => {
+        const result = [];
+        let current  = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          if (char === '"') {
+            if (inQuotes && line[i + 1] === '"') {
+              current += '"';
+              i++;
+            } else {
+              inQuotes = !inQuotes;
+            }
+          } else if (char === ',' && !inQuotes) {
+            result.push(current.trim());
+            current = '';
+          } else {
+            current += char;
+          }
+        }
+        result.push(current.trim());
+        return result;
+      };
+
       const lines   = csvText.trim().split('\n');
-      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+      const headers = parseCSVLine(lines[0]);
       const rows    = lines.slice(1);
 
       console.log(`  📊 Batch ${batch_number} — ${rows.length} rows found. Pushing to dataset...`);
 
       for (const line of rows) {
-        const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+        if (!line.trim()) continue;
+        const values = parseCSVLine(line);
         const rowObj = {};
         headers.forEach((h, i) => { rowObj[h] = values[i] || ''; });
         await Actor.pushData(rowObj);
@@ -219,7 +245,7 @@ try {
     batchJobs = await getNextBatchJobs();
   }
 
-  // ✅ CHANGE 2: while(batchJobs) loop + getNextBatchJobs() at end, no completedBatches counter
+  // ✅ CHANGE 2: while(batchJobs) loop + getNextBatchJobs() at end
   while (batchJobs && batchJobs.length > 0) {
 
     round++;
@@ -420,7 +446,7 @@ try {
       });
       allOutputLinks.push(outputLink);
 
-      // ✅ ADDED: push full CSV rows to dataset instead of minimal summary push
+      // ✅ Push full CSV rows to dataset with proper CSV parser
       if (outputLink) {
         await fetchAndPushDriveData(outputLink, batch_number);
       } else {
