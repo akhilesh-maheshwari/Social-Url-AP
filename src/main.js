@@ -8,36 +8,79 @@ try {
   // 1. GET INPUT
   // ──────────────────────────────
   const input          = await Actor.getInput();
-  const serviceTagName = input.fileName     || '';
-  const linkedinUrls   = input.linkedinUrls || [];
-  const serviceName    = 'Linkedin Profile Scraper';
-  const serviceOption1 = 'linkedin';
-  const requestSource  = 'Linkedin_Profile_Scraper_AP';
-  const boomerangInputUrl = 'https://s1.boomerangserver.co.in/webhook/private-profile-scraper';
-  const boomerangStatUrl  = 'https://s1.boomerangserver.co.in/webhook/private-profile-scraper-stats';
+  const entries        = input.entries               || '';
+  const uploadedFile   = input.uploadedFile          || '';
+  const serviceTagName = input.serviceRequestTagName || '';
+  const serviceName    = input.serviceName           || 'Waterfall Enrichment';
+  const serviceOption1 = input.serviceOption1        || 'pro';
+  const requestSource  = input.requestSource         || 'Waterfall_enrichment_AP';
+  const boomerangInputUrl = input.boomerangInputUrl  || 'https://s1.boomerangserver.co.in/webhook/waterfall-live';
+  const boomerangStatUrl  = input.boomerangStatUrl   || 'https://s1.boomerangserver.co.in/webhook/waterfall-request-stats';
 
   console.log('Tag Name :', serviceTagName);
   console.log('Service  :', serviceName);
-  console.log('URLs     :', linkedinUrls.length);
-
-  if (!serviceTagName.trim()) throw new Error('fileName is required!');
-  if (!linkedinUrls.length)   throw new Error('At least one LinkedIn URL is required!');
+  console.log('Entries  :', entries ? 'Yes' : 'No');
+  console.log('File URL :', uploadedFile ? 'Yes' : 'No');
 
   // ──────────────────────────────
-  // 2. VALIDATE + CLEAN URLS
+  // 2. BUILD CSV CONTENT
   // ──────────────────────────────
-  const validUrls = linkedinUrls
-    .map(u => (typeof u === 'string' ? u.trim() : ''))
-    .filter(u => u.startsWith('https://www.linkedin.com/in/') || u.startsWith('http://www.linkedin.com/in/'));
+  let csvContent = '';
+  let fileName   = '';
+  let rowCount   = 0;
 
-  console.log('Valid URLs:', validUrls.length);
-  if (!validUrls.length) throw new Error('No valid LinkedIn profile URLs found!');
+  if (entries && entries.trim()) {
 
-  const rowCount   = validUrls.length;
-  const csvContent = 'url\n' + validUrls.join('\n');
-  const fileName   = serviceTagName.replace(/[^a-zA-Z0-9]/g, '_') + '_' + new Date().toISOString().replace(/[:.]/g, '-') + '.csv';
+    console.log('Processing manual entries...');
+    const lines = entries.trim().split('\n').map(l => l.trim()).filter(l => l);
 
-  console.log('CSV preview:\n', csvContent.split('\n').slice(0, 3).join('\n'));
+    const validLines = [];
+    for (const line of lines) {
+      const cols = line.split(',');
+      if (cols.length === 3) {
+        validLines.push(cols.map(c => c.trim()).join(',') + ',');
+      } else if (cols.length === 4) {
+        validLines.push(cols.map(c => c.trim()).join(','));
+      } else {
+        validLines.push(line.trim());
+      }
+    }
+
+    const hasNameCols = validLines[0] && validLines[0].split(',').length >= 3;
+    const header = hasNameCols ? 'first_name,last_name,organization_website_url,email' : 'url';
+
+    csvContent = header + '\n' + validLines.join('\n');
+    rowCount   = validLines.length;
+    fileName   = serviceTagName.replace(/[^a-zA-Z0-9]/g, '_') + '_' + new Date().toISOString().replace(/[:.]/g, '-') + '.csv';
+
+    console.log('Valid rows:', rowCount);
+    console.log('CSV preview:\n', csvContent.split('\n').slice(0, 3).join('\n'));
+
+  } else if (uploadedFile && uploadedFile.trim()) {
+
+    console.log('Processing file URL...');
+    let csvUrl = uploadedFile.trim();
+
+    if (csvUrl.includes('docs.google.com/spreadsheets')) {
+      const match = csvUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+      if (match) {
+        csvUrl = `https://docs.google.com/spreadsheets/d/${match[1]}/export?format=csv&gid=0`;
+        console.log('Converted URL:', csvUrl);
+      }
+    }
+
+    const csvRes  = await fetch(csvUrl);
+    csvContent    = await csvRes.text();
+    const allRows = csvContent.trim().split('\n');
+    rowCount      = allRows.length - 1;
+    fileName      = serviceTagName.replace(/[^a-zA-Z0-9]/g, '_') + '_' + new Date().toISOString().replace(/[:.]/g, '-') + '.csv';
+
+    console.log('Downloaded rows:', rowCount);
+    console.log('CSV preview:\n', allRows.slice(0, 3).join('\n'));
+
+  } else {
+    throw new Error('Please provide either manual entries or a file URL!');
+  }
 
   // ──────────────────────────────
   // 3. GET APIFY RUN DETAILS
@@ -61,15 +104,13 @@ try {
   console.log('Time    :', time);
 
   // ──────────────────────────────
-  // 4. CALCULATE COST + CHARGE
+  // 4. CALCULATE COST
   // ──────────────────────────────
-  const creditsCost = parseFloat((rowCount * 0.005).toFixed(3));
-  console.log('URL count    :', rowCount);
+  const creditsCost = parseFloat((rowCount * 0.015).toFixed(3));
+  console.log('Row count    :', rowCount);
   console.log('Credits cost : $', creditsCost);
 
-  // ← ONLY CHANGE: charge user $0.005 per URL
-  await Actor.charge({ eventName: 'linkedin', count: rowCount });
-  console.log('Charged      : $', creditsCost);
+  await Actor.charge({ eventName: serviceOption1, count: rowCount });
 
   // ──────────────────────────────
   // 5. FETCH DRIVE CSV + PUSH ROWS
@@ -81,66 +122,27 @@ try {
         console.log(`  ⚠️ Batch ${batch_number} — Could not extract file ID from Drive link.`);
         return;
       }
-      const fileId = fileIdMatch[1];
-      const csvUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+      const fileId  = fileIdMatch[1];
+      const csvUrl  = `https://drive.google.com/uc?export=download&id=${fileId}`;
 
       console.log(`  📥 Batch ${batch_number} — Fetching CSV from Drive...`);
       const csvRes  = await fetch(csvUrl);
       const csvText = await csvRes.text();
 
-      const parseCSV = (text) => {
-        const rows    = [];
-        let current   = '';
-        let inQuotes  = false;
-        let fields    = [];
+      const lines   = csvText.trim().split('\n');
+      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+      const rows    = lines.slice(1);
 
-        for (let i = 0; i < text.length; i++) {
-          const char     = text[i];
-          const nextChar = text[i + 1];
+      console.log(`  📊 Batch ${batch_number} — ${rows.length} rows found. Pushing to dataset...`);
 
-          if (char === '"') {
-            if (inQuotes && nextChar === '"') {
-              current += '"';
-              i++;
-            } else {
-              inQuotes = !inQuotes;
-            }
-          } else if (char === ',' && !inQuotes) {
-            fields.push(current.trim());
-            current = '';
-          } else if ((char === '\n' || (char === '\r' && nextChar === '\n')) && !inQuotes) {
-            if (char === '\r') i++;
-            fields.push(current.trim());
-            rows.push(fields);
-            fields  = [];
-            current = '';
-          } else {
-            current += char;
-          }
-        }
-
-        if (current || fields.length) {
-          fields.push(current.trim());
-          if (fields.some(f => f !== '')) rows.push(fields);
-        }
-
-        return rows;
-      };
-
-      const rows    = parseCSV(csvText);
-      const headers = rows[0];
-      const data    = rows.slice(1);
-
-      console.log(`  📊 Batch ${batch_number} — ${data.length} rows found. Pushing to dataset...`);
-
-      for (const row of data) {
-        if (!row.some(f => f !== '')) continue;
+      for (const line of rows) {
+        const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
         const rowObj = {};
-        headers.forEach((h, i) => { rowObj[h] = row[i] || ''; });
+        headers.forEach((h, i) => { rowObj[h] = values[i] || ''; });
         await Actor.pushData(rowObj);
       }
 
-      console.log(`  💾 Batch ${batch_number} — ${data.length} rows saved to dataset.`);
+      console.log(`  💾 Batch ${batch_number} — ${rows.length} rows saved to dataset.`);
     } catch (err) {
       console.log(`  ❌ Batch ${batch_number} — Failed to fetch Drive data: ${err.message}`);
     }
@@ -156,11 +158,11 @@ try {
   let wf1Res;
   try {
     wf1Res = await fetch(
-      'https://frontend.boomerangserver.co.in/webhook/master_webhook_socialurl',
+      'https://frontend.boomerangserver.co.in/webhook/11fd4929-f376-40f8-9d6f-71f1b3587b3d',
       {
         method : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        signal : AbortSignal.timeout(60000),
+        signal : AbortSignal.timeout(300000), // ✅ 5 minutes
         body   : JSON.stringify({
           userId,
           runId,
@@ -169,7 +171,7 @@ try {
           rowCount,
           creditsCost,
           csvContent,
-          uploadedFile     : '',
+          uploadedFile,
           fileName,
           boomerangInputUrl,
           service_option_1 : serviceOption1,
@@ -199,7 +201,6 @@ try {
   const masterFileUrl     = wf1Data.masterFileUrl     || '';
   const total_batches     = parseInt(wf1Data.total_batches || '0');
   const batchFolderId     = wf1Data.batchFolderId     || '';
-  const nocodb_master_id  = wf1Data.nocodb_master_id  || '';
   const batch_id          = wf1Data.batch_id          || '';
 
   if (!request_unique_id) throw new Error('No request_unique_id returned from Step 1!');
@@ -212,15 +213,14 @@ try {
   // ──────────────────────────────
   // 7. STEP 2 — PROCESS BATCHES
   // ──────────────────────────────
-  let completedBatches = 0;
-  let round            = 0;
-  let allOutputLinks   = [];
-  let allBatchResults  = [];
+  let round           = 0;
+  let allOutputLinks  = [];
+  let allBatchResults = [];
 
   const getNextBatchJobs = async () => {
     try {
       const wf2Res = await fetch(
-        'https://frontend.boomerangserver.co.in/webhook/batches_socialurl',
+        'https://frontend.boomerangserver.co.in/webhook/2d274972-e90d-4f14-bb58-57b7ea40abdf',
         {
           method : 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -256,7 +256,7 @@ try {
   let batchJobs = await getNextBatchJobs();
 
   while (!batchJobs || batchJobs.length === 0) {
-    console.log('⏳ No slots available (backend full). Waiting 2 mins before retry...');
+    console.log('⏳ No pending batches yet. Waiting 2 mins before retry...');
     await new Promise(r => setTimeout(r, 2 * 60 * 1000));
     batchJobs = await getNextBatchJobs();
   }
@@ -273,7 +273,7 @@ try {
 
     const batchStatusResults = await Promise.all(
       batchJobs.map(async (job) => {
-        const { request_id, driveInputLink, batch_number, nocodb_id } = job;
+        const { request_id, driveInputLink, batch_number } = job;
         console.log(`  ⏳ Batch ${batch_number} — Polling status (request_id: ${request_id})...`);
 
         const maxAttempts  = 10;
@@ -282,7 +282,7 @@ try {
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
           try {
             const statusRes = await fetch(
-              'https://frontend.boomerangserver.co.in/webhook/batch-status-socialurl',
+              'https://frontend.boomerangserver.co.in/webhook/batch-status-copy',
               {
                 method : 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -328,10 +328,9 @@ try {
         }
 
         console.log(`  ❌ Batch ${batch_number} timed out after ${maxAttempts} attempts.`);
-
         try {
           await fetch(
-            'https://frontend.boomerangserver.co.in/webhook/waterfall-output-socialurl',
+            'https://frontend.boomerangserver.co.in/webhook/waterfall-output-copy',
             {
               method : 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -346,13 +345,12 @@ try {
                 request_id,
                 requestStatus     : 'Error',
                 driveInputLink,
-                boomerangOutputUrl: `https://s1.boomerangserver.co.in/webhook/private-profile-scraper-output?request_id=${request_id}`,
+                boomerangOutputUrl: `https://s1.boomerangserver.co.in/webhook/waterfalls-request-output?request_id=${request_id}`,
                 batch_number,
                 request_unique_id,
                 batchFolderId,
-                service_option_1  : serviceOption1,
-                service_name      : serviceName,
-                request_source    : requestSource,
+                webhookUrl        : 'https://internal.boomerangserver.co.in/webhook/waterfall-output-copy',
+                executionMode     : 'production',
                 reason            : `Timed out after ${maxAttempts} attempts`
               })
             }
@@ -376,59 +374,41 @@ try {
 
     for (const result of batchStatusResults) {
       const { job } = result;
-      const { request_id, driveInputLink, batch_number, nocodb_id } = job;
+      const { request_id, driveInputLink, batch_number } = job;
 
       if (result.status !== 'Completed') {
         console.log(`  ⚠️ Batch ${batch_number} did not complete. Skipping output.`);
-        const failedResult = {
-          batch_number,
-          request_id,
-          status             : result.status || 'Error',
-          profiles_found     : 0,
-          profiles_not_found : 0,
-          output_url         : ''
-        };
-        batchResults.push(failedResult);
+        batchResults.push({ batch_number, request_id, status: result.status || 'Error', output_url: '' });
         allOutputLinks.push('');
-        await Actor.pushData({
-          run_id       : runId,
-          service_name : serviceName,
-          service_tag  : serviceTagName,
-          request_id,
-          status       : failedResult.status,
-          'Output Link': 'Failed'
-        });
-        console.log(`  💾 Batch ${batch_number} (failed) saved to dataset.`);
         continue;
       }
 
-      const boomerangOutputUrl = `https://s1.boomerangserver.co.in/webhook/private-profile-scraper-output?request_id=${request_id}`;
-
+      const boomerangOutputUrl = `https://s1.boomerangserver.co.in/webhook/waterfalls-request-output?request_id=${request_id}`;
       let outputLink = '';
+
       try {
         const outputRes = await fetch(
-          'https://frontend.boomerangserver.co.in/webhook/waterfall-output-socialurl',
+          'https://frontend.boomerangserver.co.in/webhook/waterfall-output-copy',
           {
             method : 'POST',
             headers: { 'Content-Type': 'application/json' },
-            signal : AbortSignal.timeout(60000),
+            signal : AbortSignal.timeout(120000),
             body   : JSON.stringify({
               userId,
               runId,
               time,
               serviceTagName,
-              rowCount         : job.batch_size || rowCount,
+              rowCount          : job.batch_size || rowCount,
               creditsCost,
               request_id,
-              requestStatus    : result.status,
+              requestStatus     : result.status,
               driveInputLink,
               boomerangOutputUrl,
               batch_number,
               request_unique_id,
               batchFolderId,
-              service_option_1 : serviceOption1,
-              service_name     : serviceName,
-              request_source   : requestSource
+              webhookUrl        : 'https://internal.boomerangserver.co.in/webhook/waterfall-output-copy',
+              executionMode     : 'production'
             })
           }
         );
@@ -448,14 +428,7 @@ try {
         console.log(`  ❌ No response, please try again.`);
       }
 
-      batchResults.push({
-        batch_number,
-        request_id,
-        status             : result.status,
-        profiles_found     : result.profiles_found     || 0,
-        profiles_not_found : result.profiles_not_found || 0,
-        output_url         : outputLink
-      });
+      batchResults.push({ batch_number, request_id, status: result.status, output_url: outputLink });
       allOutputLinks.push(outputLink);
 
       if (outputLink) {
@@ -491,7 +464,7 @@ try {
   const errorCount     = allBatchResults.filter(b => b.status !== 'Completed').length;
 
   console.log('\n════════════════════════════════════');
-  console.log('🎉 ALL BATCHES COMPLETED!');
+  console.log('🎉 ALL BATCHES PROCESSED!');
   console.log('════════════════════════════════════');
   console.log('Run ID          :', runId);
   console.log('Total Processed :', allBatchResults.length);
