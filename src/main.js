@@ -61,15 +61,13 @@ try {
   console.log('Time    :', time);
 
   // ──────────────────────────────
-  // 4. CALCULATE COST + CHARGE
+  // 4. CALCULATE COST
   // ──────────────────────────────
   const creditsCost = parseFloat((rowCount * 0.005).toFixed(3));
   console.log('URL count    :', rowCount);
   console.log('Credits cost : $', creditsCost);
 
-  // ← ONLY CHANGE: charge user $0.005 per URL
-  await Actor.charge({ eventName: 'linkedin', count: rowCount });
-  console.log('Charged      : $', creditsCost);
+  // ✅ REMOVED: upfront bulk Actor.charge() — now charged per completed batch below
 
   // ──────────────────────────────
   // 5. FETCH DRIVE CSV + PUSH ROWS
@@ -216,6 +214,7 @@ try {
   let round            = 0;
   let allOutputLinks   = [];
   let allBatchResults  = [];
+  let totalCharged     = 0; // ✅ track total charged
 
   const getNextBatchJobs = async () => {
     try {
@@ -402,6 +401,13 @@ try {
         continue;
       }
 
+      // ✅ Charge only for this completed batch
+      const batchSize  = job.batch_size || 0;
+      const batchCost  = parseFloat((batchSize * 0.005).toFixed(3));
+      totalCharged    += batchCost;
+      console.log(`  💳 Batch ${batch_number} — Charging for ${batchSize} URLs ($${batchCost}). Total charged: $${totalCharged.toFixed(3)}`);
+      await Actor.charge({ eventName: serviceOption1, count: batchSize });
+
       const boomerangOutputUrl = `https://s1.boomerangserver.co.in/webhook/private-profile-scraper-output?request_id=${request_id}`;
 
       let outputLink = '';
@@ -497,6 +503,7 @@ try {
   console.log('Total Processed :', allBatchResults.length);
   console.log('Completed       :', completedCount);
   console.log('Errors          :', errorCount);
+  console.log('Total Charged   : $', totalCharged.toFixed(3));
   console.log('\nOutput Links:');
   allOutputLinks.forEach((link, i) => console.log(`  Batch ${i + 1} : ${link || 'Failed'}`));
   console.log('════════════════════════════════════');
