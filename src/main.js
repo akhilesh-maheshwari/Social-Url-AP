@@ -67,8 +67,6 @@ try {
   console.log('URL count    :', rowCount);
   console.log('Credits cost : $', creditsCost);
 
-  // ✅ REMOVED: upfront bulk Actor.charge() — now charged per completed batch below
-
   // ──────────────────────────────
   // 5. FETCH DRIVE CSV + PUSH ROWS
   // ──────────────────────────────
@@ -131,14 +129,21 @@ try {
 
       console.log(`  📊 Batch ${batch_number} — ${data.length} rows found. Pushing to dataset...`);
 
+      // FIX: Build all rows first, then push as a single array.
+      // This ensures Apify reads column order from the first item's key insertion order
+      // (which matches CSV header order), instead of sorting alphabetically.
+      const items = [];
       for (const row of data) {
         if (!row.some(f => f !== '')) continue;
         const rowObj = {};
-        headers.forEach((h, i) => { rowObj[h] = row[i] || ''; });
-        await Actor.pushData(rowObj);
+        headers.forEach((h, i) => { rowObj[h] = row[i] !== undefined ? row[i] : ''; });
+        items.push(rowObj);
+      }
+      if (items.length > 0) {
+        await Actor.pushData(items);
       }
 
-      console.log(`  💾 Batch ${batch_number} — ${data.length} rows saved to dataset.`);
+      console.log(`  💾 Batch ${batch_number} — ${items.length} rows saved to dataset.`);
     } catch (err) {
       console.log(`  ❌ Batch ${batch_number} — Failed to fetch Drive data: ${err.message}`);
     }
@@ -214,7 +219,7 @@ try {
   let round            = 0;
   let allOutputLinks   = [];
   let allBatchResults  = [];
-  let totalCharged     = 0; // ✅ track total charged
+  let totalCharged     = 0;
 
   const getNextBatchJobs = async () => {
     try {
@@ -389,19 +394,15 @@ try {
         };
         batchResults.push(failedResult);
         allOutputLinks.push('');
-        await Actor.pushData({
-          run_id       : runId,
-          service_name : serviceName,
-          service_tag  : serviceTagName,
-          request_id,
-          status       : failedResult.status,
-          'Output Link': 'Failed'
-        });
-        console.log(`  💾 Batch ${batch_number} (failed) saved to dataset.`);
+        // FIX: Removed pushData for failed batches here.
+        // Pushing records with different columns (run_id, service_name, etc.)
+        // before any CSV data arrives was causing Apify to establish an
+        // alphabetical column schema from those records instead of CSV order.
+        console.log(`  ⚠️ Batch ${batch_number} (failed) — skipped dataset push to preserve column order.`);
         continue;
       }
 
-      // ✅ Charge only for this completed batch
+      // Charge only for this completed batch
       const batchSize  = job.batch_size || 0;
       const batchCost  = parseFloat((batchSize * 0.005).toFixed(3));
       totalCharged    += batchCost;
