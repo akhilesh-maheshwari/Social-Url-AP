@@ -66,14 +66,42 @@ try {
   console.log('Time    :', time);
 
   // ──────────────────────────────
-  // 4. CALCULATE COST
+  // 4. FREE TRIAL CHECK
   // ──────────────────────────────
-  const creditsCost = parseFloat((rowCount * 0.005).toFixed(3));
-  console.log('URL count    :', rowCount);
-  console.log('Credits cost : $', creditsCost);
+  const FREE_TRIAL_LEADS = 50;
+
+  // Named store persists across all runs — global DB of trial users for this actor
+  const trialStore  = await Actor.openKeyValueStore('boomerang-free-trials-linkedin-profile');
+  const trialRecord = await trialStore.getValue(userId);
+  const isFirstTime = !trialRecord;
+
+  let freeLeadsRemaining = 0;
+
+  if (isFirstTime) {
+    freeLeadsRemaining = FREE_TRIAL_LEADS;
+    await trialStore.setValue(userId, {
+      usedAt : new Date().toISOString(),
+      runId,
+      service: serviceName,
+      rowCount
+    });
+    console.log(`\n🎁 First-time user detected! ${FREE_TRIAL_LEADS} free leads applied.`);
+  } else {
+    console.log(`\n👤 Returning user. Free trial already used on ${trialRecord.usedAt}. Full charges apply.`);
+  }
 
   // ──────────────────────────────
-  // 5. FETCH DRIVE CSV + PUSH ROWS
+  // 5. CALCULATE COST
+  // ──────────────────────────────
+  const chargeableRows = Math.max(0, rowCount - freeLeadsRemaining);
+  const creditsCost    = parseFloat((chargeableRows * 0.005).toFixed(3));
+  console.log('URL count      :', rowCount);
+  console.log('Free leads     :', isFirstTime ? FREE_TRIAL_LEADS : 0);
+  console.log('Chargeable rows:', chargeableRows);
+  console.log('Credits cost   : $', creditsCost);
+
+  // ──────────────────────────────
+  // 6. FETCH DRIVE CSV + PUSH ROWS
   // ──────────────────────────────
   const fetchAndPushDriveData = async (outputLink, batch_number) => {
     try {
@@ -157,7 +185,7 @@ try {
   };
 
   // ──────────────────────────────
-  // 6. STEP 1 — TRIGGER WORKFLOW 1
+  // 7. STEP 1 — TRIGGER WORKFLOW 1
   // ──────────────────────────────
   console.log('\n════════════════════════════════════');
   console.log('Step 1 : Setting up master & batches');
@@ -220,13 +248,14 @@ try {
   console.log('   Total Batches :', total_batches);
 
   // ──────────────────────────────
-  // 7. STEP 2 — PROCESS BATCHES
+  // 8. STEP 2 — PROCESS BATCHES
   // ──────────────────────────────
   let completedBatches = 0;
   let round            = 0;
   let allOutputLinks   = [];
   let allBatchResults  = [];
   let totalCharged     = 0;
+  let totalFreeUsed    = 0;
 
   const getNextBatchJobs = async () => {
     try {
@@ -466,9 +495,8 @@ try {
       allOutputLinks.push(outputLink);
 
       // ──────────────────────────────
-      // CHARGE-AFTER-DELIVERY
-      // Fetch Drive rows FIRST, then charge based on what actually landed.
-      // If outputLink is empty OR 0 rows pushed → skip charge entirely.
+      // CHARGE-AFTER-DELIVERY (with free trial)
+      // Fetch Drive rows FIRST, then consume free leads, then charge the rest.
       // ──────────────────────────────
       let rowsPushed = 0;
       if (outputLink) {
@@ -478,10 +506,24 @@ try {
       }
 
       if (rowsPushed > 0) {
-        const batchCost = parseFloat((rowsPushed * 0.005).toFixed(3));
-        totalCharged   += batchCost;
-        console.log(`  💳 Batch ${batch_number} — Charging for ${rowsPushed} rows ($${batchCost}). Total charged: $${totalCharged.toFixed(3)}`);
-        await Actor.charge({ eventName: serviceOption1, count: rowsPushed });
+        // Consume free trial leads first, then charge the remainder
+        const freeForBatch    = Math.min(freeLeadsRemaining, rowsPushed);
+        const chargeableLeads = rowsPushed - freeForBatch;
+        freeLeadsRemaining   -= freeForBatch;
+        totalFreeUsed        += freeForBatch;
+
+        if (freeForBatch > 0) {
+          console.log(`  🎁 Batch ${batch_number} — ${freeForBatch} rows FREE (trial). ${chargeableLeads} rows chargeable.`);
+        }
+
+        if (chargeableLeads > 0) {
+          const batchCost = parseFloat((chargeableLeads * 0.005).toFixed(3));
+          totalCharged   += batchCost;
+          console.log(`  💳 Batch ${batch_number} — Charging for ${chargeableLeads} rows ($${batchCost}). Total charged: $${totalCharged.toFixed(3)}`);
+          await Actor.charge({ eventName: serviceOption1, count: chargeableLeads });
+        } else {
+          console.log(`  ✅ Batch ${batch_number} — Fully covered by free trial. No charge.`);
+        }
       } else {
         console.log(`  ⚠️ Batch ${batch_number} — 0 rows pushed, skipping charge.`);
       }
@@ -507,7 +549,7 @@ try {
   }
 
   // ──────────────────────────────
-  // 8. FINAL SUMMARY
+  // 9. FINAL SUMMARY
   // ──────────────────────────────
   const completedCount = allBatchResults.filter(b => b.status === 'Completed').length;
   const errorCount     = allBatchResults.filter(b => b.status !== 'Completed').length;
@@ -516,6 +558,7 @@ try {
   console.log('🎉 ALL BATCHES COMPLETED!');
   console.log('════════════════════════════════════');
   console.log('Run ID          :', runId);
+  console.log('Free leads used :', totalFreeUsed);
   console.log('Total Processed :', allBatchResults.length);
   console.log('Completed       :', completedCount);
   console.log('Errors          :', errorCount);
