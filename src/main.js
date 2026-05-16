@@ -80,13 +80,13 @@ try {
       const fileIdMatch = outputLink.match(/\/d\/([a-zA-Z0-9-_]+)/);
       if (!fileIdMatch) {
         console.log(`  ⚠️ Batch ${batch_number} — Could not extract file ID from Drive link.`);
-        return;
+        return 0;
       }
       const fileId = fileIdMatch[1];
       const csvUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
 
       console.log(`  📥 Batch ${batch_number} — Fetching CSV from Drive...`);
-      const csvRes  = await fetch(csvUrl);
+      const csvRes  = await fetch(csvUrl, { signal: AbortSignal.timeout(60000) });
       const csvText = await csvRes.text();
 
       const parseCSV = (text) => {
@@ -149,8 +149,10 @@ try {
       }
 
       console.log(`  💾 Batch ${batch_number} — ${items.length} rows saved to dataset.`);
+      return items.length;
     } catch (err) {
       console.log(`  ❌ Batch ${batch_number} — Failed to fetch Drive data: ${err.message}`);
+      return 0;
     }
   };
 
@@ -407,13 +409,6 @@ try {
         continue;
       }
 
-      // Charge only for this completed batch
-      const batchSize  = job.batch_size || 0;
-      const batchCost  = parseFloat((batchSize * 0.005).toFixed(3));
-      totalCharged    += batchCost;
-      console.log(`  💳 Batch ${batch_number} — Charging for ${batchSize} URLs ($${batchCost}). Total charged: $${totalCharged.toFixed(3)}`);
-      await Actor.charge({ eventName: serviceOption1, count: batchSize });
-
       const boomerangOutputUrl = `https://s1.boomerangserver.co.in/webhook/private-profile-scraper-output?request_id=${request_id}`;
 
       let outputLink = '';
@@ -470,10 +465,25 @@ try {
       });
       allOutputLinks.push(outputLink);
 
+      // ──────────────────────────────
+      // CHARGE-AFTER-DELIVERY
+      // Fetch Drive rows FIRST, then charge based on what actually landed.
+      // If outputLink is empty OR 0 rows pushed → skip charge entirely.
+      // ──────────────────────────────
+      let rowsPushed = 0;
       if (outputLink) {
-        await fetchAndPushDriveData(outputLink, batch_number);
+        rowsPushed = await fetchAndPushDriveData(outputLink, batch_number);
       } else {
-        console.log(`  ⚠️ Batch ${batch_number} — No output link, skipping Drive fetch.`);
+        console.log(`  ⚠️ Batch ${batch_number} — No output link, skipping Drive fetch and charge.`);
+      }
+
+      if (rowsPushed > 0) {
+        const batchCost = parseFloat((rowsPushed * 0.005).toFixed(3));
+        totalCharged   += batchCost;
+        console.log(`  💳 Batch ${batch_number} — Charging for ${rowsPushed} rows ($${batchCost}). Total charged: $${totalCharged.toFixed(3)}`);
+        await Actor.charge({ eventName: serviceOption1, count: rowsPushed });
+      } else {
+        console.log(`  ⚠️ Batch ${batch_number} — 0 rows pushed, skipping charge.`);
       }
     }
 
