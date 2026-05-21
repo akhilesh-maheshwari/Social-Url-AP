@@ -45,23 +45,29 @@ No login cookies required.
 
 ```json
 {
-  "publicIdentifier": "john-doe",
-  "linkedInIdentifier": "ACoAAAB1234",
-  "memberIdentifier": "123456789",
-  "linkedInUrl": "https://www.linkedin.com/in/john-doe/",
-  "firstName": "John",
-  "lastName": "Doe",
-  "headline": "Senior Product Manager",
-  "summary": "Experienced product leader with strong background in SaaS",
-  "location": "London, United Kingdom",
-  "followerCount": 3200,
-  "connections_count": 1500,
-  "skills": ["Product Strategy","SaaS","Growth"],
-  "languages": ["English"],
+  "publicIdentifier": "satya-n*****",
+  "linkedInIdentifier": "ACoAA*****92",
+  "memberIdentifier": "93*****12",
+  "linkedInUrl": "https://www.linkedin.com/in/satya-n*****/",
+  "firstName": "Satya",
+  "lastName": "N*****",
+  "headline": "Chairman & CEO at Microsoft",
+  "summary": "Experienced technology leader with strong background in AI, cloud computing, enterprise growth, and digital transformation.",
+  "location": "Redmond, Washington, United States",
+  "followerCount": 1200000,
+  "connections_count": 500,
+  "skills": [
+    "Artificial Intelligence",
+    "Cloud Computing",
+    "Leadership"
+  ],
+  "languages": [
+    "English"
+  ],
   "positions": [
     {
-      "company": "TechCorp",
-      "title": "Senior Product Manager"
+      "company": "Microsoft",
+      "title": "Chairman & Chief Executive Officer"
     }
   ]
 }
