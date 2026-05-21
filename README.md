@@ -1,4 +1,4 @@
-# 🧠 LinkedIn Profile Complete Export
+# 🧠 LinkedIn profile scraper
 
 Extract complete LinkedIn profile-level data from profile URLs including work experience, education, skills, recommendations, languages, and additional metadata. Designed for deep enrichment, recruiting intelligence, research, and advanced outreach workflows.
 
