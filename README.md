@@ -45,14 +45,14 @@ No login cookies required.
 
 ```json
 {
-    "publicIdentifier": "salman-ha***d-638a86198",
+    "publicIdentifier": "salman-ha***d-638****198",
     "linkedInIdentifier": "ACoAAC5u7Aw*****z1lWSxgaqWCG1uV3cRARQ",
     "memberIdentifier": "779021324",
-    "linkedInUrl": "https://www.linkedin.com/in/salman-h****d-638a86198",
+    "linkedInUrl": "https://www.linkedin.com/in/salman-h****d-638****98",
     "firstName": "Salman",
     "lastName": "H****d",
     "headline": "Founder/CEO of Kainaat Studios, and Professor of Integrated Science & Humanities, Hampshire College, Massachusetts",
-    "summary": "Salman Hameed is the founder and CEO of the non-profit Kainaat Studios, that creates topical astronomy videos in Urdu for audiences in Pakistan (and broader South Asia). He is also Charles Taylor Chair and Professor of Integrated Science & Humanities at Hampshire College, Amherst, Massachusetts. He holds a Ph.D. in astronomy and is a member of the Five College Astronomy Department (FCAD), but his research is inter-disciplinary and it focuses on analyzing how science interacts with society. Science communication is still his primary focus: Salman has a YouTube Channel (Kainaat Astronomy) for Urdu videos and a weekly astronomy segment in English for a radio station (WRSI FM93.9) in Western Massachusetts. His writings have appeared in Dawn Magazine, Express Tribune, Science Magazine, NPR, and the Guardian.",
+    "summary": "Salman H****d is the founder and CEO of the non-profit Kainaat Studios, that creates topical astronomy videos in Urdu for audiences in Pakistan (and broader South Asia). He is also Charles Taylor Chair and Professor of Integrated Science & Humanities at Hampshire College, Amherst, Massachusetts. He holds a Ph.D. in astronomy and is a member of the Five College Astronomy Department (FCAD), but his research is inter-disciplinary and it focuses on analyzing how science interacts with society. Science communication is still his primary focus: Salman has a YouTube Channel (Kainaat Astronomy) for Urdu videos and a weekly astronomy segment in English for a radio station (WRSI FM93.9) in Western Massachusetts. His writings have appeared in Dawn Magazine, Express Tribune, Science Magazine, NPR, and the Guardian.",
     "location": "Amherst, Massachusetts, United States",
     "followerCount": "1606",
     "premium": "FALSE",
