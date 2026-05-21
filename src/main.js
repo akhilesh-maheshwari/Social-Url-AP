@@ -77,14 +77,11 @@ try {
 
   let freeLeadsRemaining = 0;
 
+  // FIX 1: Removed trialStore.setValue from here.
+  // Trial is only marked as used after rows are actually delivered (see charge section below).
+  // This prevents the trial being burned if Step 1 / n8n fails before any data is returned.
   if (isFirstTime) {
     freeLeadsRemaining = FREE_TRIAL_LEADS;
-    await trialStore.setValue(userId, {
-      usedAt : new Date().toISOString(),
-      runId,
-      service: serviceName,
-      rowCount
-    });
     console.log(`\n🎁 First-time user detected! ${FREE_TRIAL_LEADS} free leads applied.`);
   } else {
     console.log(`\n👤 Returning user. Free trial already used on ${trialRecord.usedAt}. Full charges apply.`);
@@ -295,8 +292,17 @@ try {
 
   let batchJobs = await getNextBatchJobs();
 
+  // FIX 2: Added max retry limit to prevent infinite loop.
+  // 23 retries × 2 min = ~45 min max wait, then exit cleanly.
+  let retryCount = 0;
+  const MAX_RETRIES = 23; // 23 × 2 min ≈ 45 min max wait
+
   while (!batchJobs || batchJobs.length === 0) {
-    console.log('⏳ No slots available (backend full). Waiting 2 mins before retry...');
+    retryCount++;
+    if (retryCount > MAX_RETRIES) {
+      throw new Error(`No batch slots available after ${MAX_RETRIES} retries (45 min). Please try again later.`);
+    }
+    console.log(`⏳ No slots available (backend full). Waiting 2 mins before retry ${retryCount}/${MAX_RETRIES}...`);
     await new Promise(r => setTimeout(r, 2 * 60 * 1000));
     batchJobs = await getNextBatchJobs();
   }
@@ -506,6 +512,18 @@ try {
       }
 
       if (rowsPushed > 0) {
+        // FIX 1: Mark free trial as used only now — after real rows are delivered.
+        // This prevents the trial being burned if the run fails before any data arrives.
+        if (isFirstTime && totalFreeUsed === 0) {
+          await trialStore.setValue(userId, {
+            usedAt : new Date().toISOString(),
+            runId,
+            service: serviceName,
+            rowCount
+          });
+          console.log(`  🎁 Free trial marked as used after first successful delivery.`);
+        }
+
         // Consume free trial leads first, then charge the remainder
         const freeForBatch    = Math.min(freeLeadsRemaining, rowsPushed);
         const chargeableLeads = rowsPushed - freeForBatch;
@@ -520,7 +538,13 @@ try {
           const batchCost = parseFloat((chargeableLeads * 0.005).toFixed(3));
           totalCharged   += batchCost;
           console.log(`  💳 Batch ${batch_number} — Charging for ${chargeableLeads} rows ($${batchCost}). Total charged: $${totalCharged.toFixed(3)}`);
-          await Actor.charge({ eventName: serviceOption1, count: chargeableLeads });
+          // FIX 3: Wrapped Actor.charge() in try/catch.
+          // A charge failure is now non-fatal — it logs and continues remaining batches.
+          try {
+            await Actor.charge({ eventName: serviceOption1, count: chargeableLeads });
+          } catch (chargeErr) {
+            console.log(`  ⚠️ Batch ${batch_number} — Charge failed (non-fatal): ${chargeErr.message}`);
+          }
         } else {
           console.log(`  ✅ Batch ${batch_number} — Fully covered by free trial. No charge.`);
         }
