@@ -1,6 +1,8 @@
 {
   "actorSpecification": 1,
-  "name": "your-actor-name",
+  "name": "linkedin-profile-scraper",
+  "title": "LinkedIn Profile Scraper",
+  "description": "Scrape and enrich LinkedIn profiles with professional data.",
   "version": "1.0",
   "storages": {
     "dataset": {
