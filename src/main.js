@@ -27,7 +27,13 @@ try {
   // 2. VALIDATE + CLEAN URLS
   // ──────────────────────────────
   const validUrls = linkedinUrls
-    .map(u => (typeof u === 'string' ? u.trim() : ''))
+    .map(u => {
+      if (typeof u !== 'string') return '';
+      u = u.trim();
+      const markdownMatch = u.match(/\[.*?\]\((https?:\/\/[^)]+)\)/);
+      if (markdownMatch) return markdownMatch[1].trim();
+      return u;
+    })
     .filter(
       u =>
         u.startsWith('https://www.linkedin.com/in/') ||
@@ -282,8 +288,8 @@ try {
 
   let batchJobs = await getNextBatchJobs();
 
-  let retryCount     = 0;
-  const MAX_RETRIES  = 23;
+  let retryCount    = 0;
+  const MAX_RETRIES = 23;
 
   while (!batchJobs || batchJobs.length === 0) {
     retryCount++;
@@ -530,7 +536,6 @@ try {
             console.log(`⏳ Remaining leads : ${remainingLeads} (needs $${remainingCost} more)`);
             console.log(`👉 Add funds at apify.com/billing and re-run to get remaining leads.`);
             await Actor.exit('Insufficient credits. Add funds at apify.com/billing and re-run.');
-            return;
           }
         } else {
           console.log(`  ✅ Batch ${batch_number} — Fully covered by free trial. No charge.`);
