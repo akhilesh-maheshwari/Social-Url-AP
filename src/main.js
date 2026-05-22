@@ -28,12 +28,11 @@ try {
   // ──────────────────────────────
   const validUrls = linkedinUrls
     .map(u => (typeof u === 'string' ? u.trim() : ''))
-   .filter(
-  u =>
-    u.startsWith('https://www.linkedin.com/in/') ||
-    u.startsWith('http://www.linkedin.com/in/') ||
-    u.startsWith('www.linkedin.com/in/')
-);
+    .filter(
+      u =>
+        u.startsWith('https://www.linkedin.com/in/') ||
+        u.startsWith('http://www.linkedin.com/in/')
+    );
 
   console.log('Valid URLs:', validUrls.length);
   if (!validUrls.length) throw new Error('No valid LinkedIn profile URLs found!');
@@ -70,16 +69,12 @@ try {
   // ──────────────────────────────
   const FREE_TRIAL_LEADS = 50;
 
-  // Named store persists across all runs — global DB of trial users for this actor
   const trialStore  = await Actor.openKeyValueStore('boomerang-free-trials-linkedin-profile');
   const trialRecord = await trialStore.getValue(userId);
   const isFirstTime = !trialRecord;
 
   let freeLeadsRemaining = 0;
 
-  // FIX 1: Removed trialStore.setValue from here.
-  // Trial is only marked as used after rows are actually delivered (see charge section below).
-  // This prevents the trial being burned if Step 1 / n8n fails before any data is returned.
   if (isFirstTime) {
     freeLeadsRemaining = FREE_TRIAL_LEADS;
     console.log(`\n🎁 First-time user detected! ${FREE_TRIAL_LEADS} free leads applied.`);
@@ -159,9 +154,6 @@ try {
 
       console.log(`  📊 Batch ${batch_number} — ${data.length} rows found. Pushing to dataset...`);
 
-      // FIX: Build all rows first, then push as a single array.
-      // This ensures Apify reads column order from the first item's key insertion order
-      // (which matches CSV header order), instead of sorting alphabetically.
       const items = [];
       for (const row of data) {
         if (!row.some(f => f !== '')) continue;
@@ -234,8 +226,6 @@ try {
   const masterFileUrl     = wf1Data.masterFileUrl     || '';
   const total_batches     = parseInt(wf1Data.total_batches || '0');
   const batchFolderId     = wf1Data.batchFolderId     || '';
-  const nocodb_master_id  = wf1Data.nocodb_master_id  || '';
-  const batch_id          = wf1Data.batch_id          || '';
 
   if (!request_unique_id) throw new Error('No request_unique_id returned from Step 1!');
 
@@ -247,12 +237,12 @@ try {
   // ──────────────────────────────
   // 8. STEP 2 — PROCESS BATCHES
   // ──────────────────────────────
-  let completedBatches = 0;
-  let round            = 0;
-  let allOutputLinks   = [];
-  let allBatchResults  = [];
-  let totalCharged     = 0;
-  let totalFreeUsed    = 0;
+  let round              = 0;
+  let allOutputLinks     = [];
+  let allBatchResults    = [];
+  let totalCharged       = 0;
+  let totalFreeUsed      = 0;
+  let totalRowsDelivered = 0;
 
   const getNextBatchJobs = async () => {
     try {
@@ -292,10 +282,8 @@ try {
 
   let batchJobs = await getNextBatchJobs();
 
-  // FIX 2: Added max retry limit to prevent infinite loop.
-  // 23 retries × 2 min = ~45 min max wait, then exit cleanly.
-  let retryCount = 0;
-  const MAX_RETRIES = 23; // 23 × 2 min ≈ 45 min max wait
+  let retryCount     = 0;
+  const MAX_RETRIES  = 23;
 
   while (!batchJobs || batchJobs.length === 0) {
     retryCount++;
@@ -319,7 +307,7 @@ try {
 
     const batchStatusResults = await Promise.all(
       batchJobs.map(async (job) => {
-        const { request_id, driveInputLink, batch_number, nocodb_id } = job;
+        const { request_id, driveInputLink, batch_number } = job;
         console.log(`  ⏳ Batch ${batch_number} — Polling status (request_id: ${request_id})...`);
 
         const maxAttempts  = 10;
@@ -422,24 +410,19 @@ try {
 
     for (const result of batchStatusResults) {
       const { job } = result;
-      const { request_id, driveInputLink, batch_number, nocodb_id } = job;
+      const { request_id, driveInputLink, batch_number } = job;
 
       if (result.status !== 'Completed') {
         console.log(`  ⚠️ Batch ${batch_number} did not complete. Skipping output.`);
-        const failedResult = {
+        batchResults.push({
           batch_number,
           request_id,
           status             : result.status || 'Error',
           profiles_found     : 0,
           profiles_not_found : 0,
           output_url         : ''
-        };
-        batchResults.push(failedResult);
+        });
         allOutputLinks.push('');
-        // FIX: Removed pushData for failed batches here.
-        // Pushing records with different columns (run_id, service_name, etc.)
-        // before any CSV data arrives was causing Apify to establish an
-        // alphabetical column schema from those records instead of CSV order.
         console.log(`  ⚠️ Batch ${batch_number} (failed) — skipped dataset push to preserve column order.`);
         continue;
       }
@@ -501,8 +484,7 @@ try {
       allOutputLinks.push(outputLink);
 
       // ──────────────────────────────
-      // CHARGE-AFTER-DELIVERY (with free trial)
-      // Fetch Drive rows FIRST, then consume free leads, then charge the rest.
+      // CHARGE-AFTER-DELIVERY
       // ──────────────────────────────
       let rowsPushed = 0;
       if (outputLink) {
@@ -512,8 +494,8 @@ try {
       }
 
       if (rowsPushed > 0) {
-        // FIX 1: Mark free trial as used only now — after real rows are delivered.
-        // This prevents the trial being burned if the run fails before any data arrives.
+        totalRowsDelivered += rowsPushed;
+
         if (isFirstTime && totalFreeUsed === 0) {
           await trialStore.setValue(userId, {
             usedAt : new Date().toISOString(),
@@ -524,7 +506,6 @@ try {
           console.log(`  🎁 Free trial marked as used after first successful delivery.`);
         }
 
-        // Consume free trial leads first, then charge the remainder
         const freeForBatch    = Math.min(freeLeadsRemaining, rowsPushed);
         const chargeableLeads = rowsPushed - freeForBatch;
         freeLeadsRemaining   -= freeForBatch;
@@ -538,12 +519,18 @@ try {
           const batchCost = parseFloat((chargeableLeads * 0.005).toFixed(3));
           totalCharged   += batchCost;
           console.log(`  💳 Batch ${batch_number} — Charging for ${chargeableLeads} rows ($${batchCost}). Total charged: $${totalCharged.toFixed(3)}`);
-          // FIX 3: Wrapped Actor.charge() in try/catch.
-          // A charge failure is now non-fatal — it logs and continues remaining batches.
           try {
             await Actor.charge({ eventName: serviceOption1, count: chargeableLeads });
           } catch (chargeErr) {
-            console.log(`  ⚠️ Batch ${batch_number} — Charge failed (non-fatal): ${chargeErr.message}`);
+            const remainingLeads = rowCount - totalRowsDelivered;
+            const remainingCost  = parseFloat((remainingLeads * 0.005).toFixed(3));
+            console.log(`\n❌ Insufficient Apify credits — run stopped.`);
+            console.log(`✅ Leads delivered : ${totalRowsDelivered}`);
+            console.log(`💳 Total charged   : $${totalCharged.toFixed(3)}`);
+            console.log(`⏳ Remaining leads : ${remainingLeads} (needs $${remainingCost} more)`);
+            console.log(`👉 Add funds at apify.com/billing and re-run to get remaining leads.`);
+            await Actor.exit('Insufficient credits. Add funds at apify.com/billing and re-run.');
+            return;
           }
         } else {
           console.log(`  ✅ Batch ${batch_number} — Fully covered by free trial. No charge.`);
