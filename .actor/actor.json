@@ -4,6 +4,18 @@
   "title": "LinkedIn Profile Scraper",
   "description": "Scrape and enrich LinkedIn profiles with professional data.",
   "version": "1.0",
+  "output": {
+    "actorOutputSchemaVersion": 1,
+    "title": "LinkedIn Profile Scraper Output",
+    "description": "Scraped LinkedIn profile data including work experience, education, skills and more.",
+    "properties": {
+      "results": {
+        "type": "string",
+        "title": "LinkedIn Profiles",
+        "template": "{{links.apiDefaultDatasetUrl}}/items"
+      }
+    }
+  },
   "storages": {
     "dataset": {
       "actorSpecification": 1,
