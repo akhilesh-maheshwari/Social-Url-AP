@@ -13,8 +13,8 @@ try {
   const serviceName    = 'Linkedin Profile Scraper';
   const serviceOption1 = 'linkedin';
   const requestSource  = 'Linkedin_Profile_Scraper_AP';
-  const boomerangInputUrl = 'https://s1.boomerangserver.co.in/webhook/private-profile-scraper';
-  const boomerangStatUrl  = 'https://s1.boomerangserver.co.in/webhook/private-profile-scraper-stats';
+  const boomerangInputUrl = 'https://linkedinprivate-n8n.boomerangserver.co.in/webhook/private-profile-scraper';
+  const boomerangStatUrl  = 'https://linkedinprivate-n8n.boomerangserver.co.in/webhook/private-profile-scraper-stats';
 
   console.log('Tag Name :', serviceTagName);
   console.log('Service  :', serviceName);
@@ -386,7 +386,7 @@ try {
                 request_id,
                 requestStatus     : 'Error',
                 driveInputLink,
-                boomerangOutputUrl: `https://s1.boomerangserver.co.in/webhook/private-profile-scraper-output?request_id=${request_id}`,
+                boomerangOutputUrl: `https://linkedinprivate-n8n.boomerangserver.co.in/webhook/private-profile-scraper-output?request_id=${request_id}`,
                 batch_number,
                 request_unique_id,
                 batchFolderId,
@@ -433,7 +433,7 @@ try {
         continue;
       }
 
-      const boomerangOutputUrl = `https://s1.boomerangserver.co.in/webhook/private-profile-scraper-output?request_id=${request_id}`;
+      const boomerangOutputUrl = `https://linkedinprivate-n8n.boomerangserver.co.in/webhook/private-profile-scraper-output?request_id=${request_id}`;
 
       let outputLink = '';
       try {
