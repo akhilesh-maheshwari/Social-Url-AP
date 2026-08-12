@@ -20,7 +20,7 @@
             ]
         },
         "scrapeEmailAndText": {
-            "title": "scraping + email",
+            "title": "Scraping + Email",
             "type": "boolean",
             "description": "Enable to also scrape profile text content and email address.",
             "editor": "checkbox",
