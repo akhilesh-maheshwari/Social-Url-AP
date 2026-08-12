@@ -18,6 +18,13 @@
             "prefill": [
                 "https://www.linkedin.com/in/williamhgates"
             ]
+        },
+        "scrapeEmailAndText": {
+            "title": "Scrape Email & Text",
+            "type": "boolean",
+            "description": "Enable to also scrape profile text content and email address.",
+            "editor": "checkbox",
+            "default": false
         }
     },
     "required": [
