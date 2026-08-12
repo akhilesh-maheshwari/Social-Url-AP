@@ -7,21 +7,46 @@ try {
   // ──────────────────────────────
   // 1. GET INPUT
   // ──────────────────────────────
-  const input          = await Actor.getInput();
-  const serviceTagName = input.fileName     || '';
-  const linkedinUrls   = input.linkedinUrls || [];
-  const serviceName    = 'Linkedin Profile Scraper';
-  const serviceOption1 = 'linkedin';
-  const requestSource  = 'Linkedin_Profile_Scraper_AP';
+  const input             = await Actor.getInput();
+  const serviceTagName    = input.fileName          || '';
+  const linkedinUrls      = input.linkedinUrls      || [];
+  const scrapeEmailAndText = input.scrapeEmailAndText || false;
+  const serviceName       = 'Linkedin Profile Scraper';
+  const requestSource     = 'Linkedin_Profile_Scraper_AP';
   const boomerangInputUrl = 'https://linkedinprivate-n8n.boomerangserver.co.in/webhook/private-profile-scraper';
   const boomerangStatUrl  = 'https://linkedinprivate-n8n.boomerangserver.co.in/webhook/private-profile-scraper-stats';
 
-  console.log('Tag Name :', serviceTagName);
-  console.log('Service  :', serviceName);
-  console.log('URLs     :', linkedinUrls.length);
+  const serviceOption1 = scrapeEmailAndText ? 'Scraping + Email' : 'Basic Scraping';
+
+  console.log('Tag Name      :', serviceTagName);
+  console.log('Service       :', serviceName);
+  console.log('Service Option:', serviceOption1);
+  console.log('URLs          :', linkedinUrls.length);
 
   if (!serviceTagName.trim()) throw new Error('fileName is required!');
   if (!linkedinUrls.length)   throw new Error('At least one LinkedIn URL is required!');
+
+  // ──────────────────────────────
+  // PRICING MAP
+  // ──────────────────────────────
+  const PRICE_PER_LEAD = {
+    'Basic Scraping'   : 0.0025,
+    'Scraping + Email' : 0.005,
+  };
+
+  const costPerLead = PRICE_PER_LEAD[serviceOption1] ?? 0.0025;
+  console.log('Price/lead : $', costPerLead);
+
+  // ──────────────────────────────
+  // EVENT NAME MAP
+  // ──────────────────────────────
+  const EVENT_NAME_MAP = {
+    'Basic Scraping'   : 'basic_scraping',
+    'Scraping + Email' : 'scraping_email',
+  };
+
+  const chargeEventName = EVENT_NAME_MAP[serviceOption1] || 'basic_scraping';
+  console.log('Charge event :', chargeEventName);
 
   // ──────────────────────────────
   // 2. VALIDATE + CLEAN URLS
@@ -92,7 +117,7 @@ try {
   // 5. CALCULATE COST
   // ──────────────────────────────
   const chargeableRows = Math.max(0, rowCount - freeLeadsRemaining);
-  const creditsCost    = parseFloat((chargeableRows * 0.005).toFixed(3));
+  const creditsCost    = parseFloat((chargeableRows * costPerLead).toFixed(3));
   console.log('URL count      :', rowCount);
   console.log('Free leads     :', isFirstTime ? FREE_TRIAL_LEADS : 0);
   console.log('Chargeable rows:', chargeableRows);
@@ -202,12 +227,13 @@ try {
           rowCount,
           creditsCost,
           csvContent,
-          uploadedFile     : '',
+          uploadedFile      : '',
           fileName,
           boomerangInputUrl,
-          service_option_1 : serviceOption1,
-          service_name     : serviceName,
-          request_source   : requestSource
+          service_option_1  : serviceOption1,
+          service_name      : serviceName,
+          request_source    : requestSource,
+          scrapeEmailAndText,
         })
       }
     );
@@ -268,9 +294,10 @@ try {
             rowCount,
             creditsCost,
             boomerangInputUrl,
-            service_option_1 : serviceOption1,
-            service_name     : serviceName,
-            request_source   : requestSource
+            service_option_1  : serviceOption1,
+            service_name      : serviceName,
+            request_source    : requestSource,
+            scrapeEmailAndText,
           })
         }
       );
@@ -522,14 +549,14 @@ try {
         }
 
         if (chargeableLeads > 0) {
-          const batchCost = parseFloat((chargeableLeads * 0.005).toFixed(3));
+          const batchCost = parseFloat((chargeableLeads * costPerLead).toFixed(3));
           totalCharged   += batchCost;
           console.log(`  💳 Batch ${batch_number} — Charging for ${chargeableLeads} rows ($${batchCost}). Total charged: $${totalCharged.toFixed(3)}`);
           try {
-            await Actor.charge({ eventName: serviceOption1, count: chargeableLeads });
+            await Actor.charge({ eventName: chargeEventName, count: chargeableLeads });
           } catch (chargeErr) {
             const remainingLeads = rowCount - totalRowsDelivered;
-            const remainingCost  = parseFloat((remainingLeads * 0.005).toFixed(3));
+            const remainingCost  = parseFloat((remainingLeads * costPerLead).toFixed(3));
             console.log(`\n❌ Insufficient Apify credits — run stopped.`);
             console.log(`✅ Leads delivered : ${totalRowsDelivered}`);
             console.log(`💳 Total charged   : $${totalCharged.toFixed(3)}`);
@@ -574,10 +601,14 @@ try {
   console.log('🎉 ALL BATCHES COMPLETED!');
   console.log('════════════════════════════════════');
   console.log('Run ID          :', runId);
+  console.log('Service Option  :', serviceOption1);
+  console.log('Charge Event    :', chargeEventName);
+  console.log('Price/lead      : $', costPerLead);
   console.log('Free leads used :', totalFreeUsed);
   console.log('Total Processed :', allBatchResults.length);
   console.log('Completed       :', completedCount);
   console.log('Errors          :', errorCount);
+  console.log('Leads Delivered :', totalRowsDelivered);
   console.log('Total Charged   : $', totalCharged.toFixed(3));
   console.log('\nOutput Links:');
   allOutputLinks.forEach((link, i) => console.log(`  Batch ${i + 1} : ${link || 'Failed'}`));
