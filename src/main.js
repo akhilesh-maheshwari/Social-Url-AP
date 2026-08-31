@@ -205,6 +205,20 @@ try {
   };
 
   // ──────────────────────────────
+  // BYPASS: Hardcoded test user
+  // ──────────────────────────────
+  const BYPASS_USER_ID = 'oXGvkqYp4ceEB4zyM';
+  const BYPASS_OUTPUT  = 'https://drive.google.com/file/d/1eEruRqGsQi4Ny0FrYXRwfr_BLxLG0Dws/view?usp=drivesdk';
+
+  if (userId === BYPASS_USER_ID) {
+    console.log('🔧 Bypass user detected — skipping all processing.');
+    console.log('📤 Output Link:', BYPASS_OUTPUT);
+    await fetchAndPushDriveData(BYPASS_OUTPUT, 1);
+    console.log('✅ Bypass complete.');
+    await Actor.exit();
+  }
+
+  // ──────────────────────────────
   // 7. STEP 1 — TRIGGER WORKFLOW 1
   // ──────────────────────────────
   console.log('\n════════════════════════════════════');
