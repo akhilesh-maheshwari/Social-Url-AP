@@ -357,7 +357,7 @@ try {
         const { request_id, driveInputLink, batch_number } = job;
         console.log(`  ⏳ Batch ${batch_number} — Polling status (request_id: ${request_id})...`);
 
-        const maxAttempts  = 10;
+        const maxAttempts  = 15;
         const pollInterval = 180000;
 
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
